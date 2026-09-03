@@ -1,0 +1,37 @@
+# Flutter-related
+**/Flutter/ephemeral/
+**/Pods/
+
+# Xcode-related
+**/dgph
+**/xcuserdata/
+
+# Pastas de compilação - NUNCA enviar!
+/build/
+android/build/
+android/app/build/
+ios/build/
+
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+build/
+coverage/
+
+# Android
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Generated files
+*.apk
+*.aab
