@@ -31,7 +31,7 @@ const String cloudUploadPreset = "petshop_upload"; // ✅ ADICIONE ESTA LINHA
 
 // 🌐 URL DA API — NÃO ALTERAR!
 // emulador do Android Studio
-const String apiBase = "http://10.0.2.2:8080/api/v1";
+const String apiBase = "http://10.0.2.2:10000/api/v1";
 
 //celular real
 //const String apiBase = "https://petshop-api-rtra.onrender.com/api/v1";

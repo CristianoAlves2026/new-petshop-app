@@ -18,6 +18,26 @@ void main() async {
   // ✅ CONFIGURA NOTIFICAÇÕES E PEGA TOKEN
   await _configurarNotificacoes();
 
+  // ✅ RECEBE NOTIFICAÇÃO MESMO COM O APP ABERTO — SEM PACOTE EXTRA!
+  // ✅ NOTIFICAÇÃO COM APP ABERTO — APARECE NO TERMINAL
+  FirebaseMessaging.onMessage.listen((RemoteMessage mensagem) {
+    RemoteNotification? notificacao = mensagem.notification;
+
+    if (notificacao != null) {
+      final String titulo = notificacao.title ?? "Notificação";
+      final String corpo = notificacao.body ?? "";
+
+      // ✅ Aparece no terminal do VS Code — CONFIRMA QUE CHEGOU!
+      debugPrint("🔔 [APP ABERTO] $titulo: $corpo");
+    }
+  });
+
+  // ✅ NOTIFICAÇÃO AO ABRIR APP FECHADO
+  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage mensagem) {
+    debugPrint("🔔 [APP ABERTO POR NOTIFICAÇÃO]");
+    // Aqui você pode navegar para uma tela quando tocar na notificação
+  });
+
   runApp(const MeuApp());
 }
 
