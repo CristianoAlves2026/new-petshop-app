@@ -24,12 +24,18 @@ class TelaLancamento extends StatefulWidget {
   final dynamic idPet;
   final dynamic idLancamentoRepetido;
   final dynamic lancamento;
+  final dynamic idCategoria;
+  final dynamic idPetshop;
+  final dynamic nomePetshop;
 
   const TelaLancamento({
     super.key,
     required this.idPet,
     this.idLancamentoRepetido,
     this.lancamento,
+    this.idCategoria = 1,
+    this.idPetshop,
+    this.nomePetshop,
   });
 
   @override
@@ -39,14 +45,15 @@ class TelaLancamento extends StatefulWidget {
 class _TelaLancamentoState extends State<TelaLancamento> {
   String? _nomeProduto;
   dynamic _idProduto;
-
-  // ✅ CONTROLADORES
   final _dataController = TextEditingController();
   final _observacoesController = TextEditingController();
   final _anosController = TextEditingController();
   final _mesesController = TextEditingController();
   final _diasController = TextEditingController();
   final _proximaDoseController = TextEditingController();
+  dynamic _idPetshopSelecionado;
+  String? _nomePetshopSelecionado;
+  final _codigoPetshopController = TextEditingController();
 
   File? _foto;
   dynamic _idLancamento;
@@ -59,31 +66,33 @@ class _TelaLancamentoState extends State<TelaLancamento> {
   void initState() {
     super.initState();
 
+    _idPetshopSelecionado = widget.idPetshop;
+    _codigoPetshopController.text = widget.idPetshop?.toString() ?? '';
+
+    // ✅ BUSCA O NOME DO PETSHOP AUTOMATICAMENTE PELO ID
+    if (widget.idPetshop != null && widget.idPetshop.toString().isNotEmpty) {
+      Future.microtask(
+        () => _buscarPetshopPorCodigo(widget.idPetshop.toString()),
+      );
+    }
+
     // ✅ ==============================================
-    // ✅ REPETIR AGORA → Abre como NOVO lançamento
+    // ✅ REPETIR LANÇAMENTO
     // ✅ ==============================================
     if (widget.idLancamentoRepetido != null && widget.lancamento != null) {
       final lanc = widget.lancamento;
-
-      // 🔑 SEM ID = É NOVO, NÃO EDIÇÃO!
       _idLancamento = null;
-
-      // ✅ Copia só produto e observações
       _idProduto = lanc['idProduto'];
       _nomeProduto = lanc['descricao']?.toString();
       _observacoesController.text = lanc['observacao']?.toString() ?? '';
       _urlFoto = lanc['foto']?.toString();
-
-      // ✅ SEMPRE DATA DE HOJE (igual ao botão "+")
       final hoje = DateTime.now();
       _dataController.text =
           '${hoje.day.toString().padLeft(2, '0')}/${hoje.month.toString().padLeft(2, '0')}/${hoje.year}';
-
-      // ✅ Campo "Repetir em" fica VAZIO para preencher novo
       _proximaDoseController.text = '';
     }
     // ✅ ==============================================
-    // ✅ EDIÇÃO → Se vier com ID, abre como edição
+    // ✅ EDIÇÃO DE LANÇAMENTO
     // ✅ ==============================================
     else if (widget.lancamento != null) {
       final lanc = widget.lancamento;
@@ -91,8 +100,6 @@ class _TelaLancamentoState extends State<TelaLancamento> {
       _idProduto = lanc['idProduto'];
       _nomeProduto = lanc['descricao']?.toString();
       _urlFoto = lanc['foto']?.toString();
-
-      // ✅ Preenche data original da edição
       try {
         final dataTexto = lanc['data']?.toString() ?? '';
         if (dataTexto.isNotEmpty) {
@@ -103,8 +110,6 @@ class _TelaLancamentoState extends State<TelaLancamento> {
       } catch (e) {
         debugPrint('❌ Erro ao carregar data: $e');
       }
-
-      // ✅ Preenche data de repetir da edição
       try {
         final repetirTexto = lanc['repetir']?.toString() ?? '';
         if (repetirTexto.isNotEmpty) {
@@ -115,29 +120,33 @@ class _TelaLancamentoState extends State<TelaLancamento> {
       } catch (e) {
         debugPrint('❌ Erro ao carregar repetir: $e');
       }
-
       _observacoesController.text = lanc['observacao']?.toString() ?? '';
     }
     // ✅ ==============================================
-    // ✅ NOVO LANÇAMENTO pelo botão "+" → tudo em branco
+    // ✅ NOVO LANÇAMENTO
     // ✅ ==============================================
     else {
       final hoje = DateTime.now();
       _dataController.text =
           '${hoje.day.toString().padLeft(2, '0')}/${hoje.month.toString().padLeft(2, '0')}/${hoje.year}';
     }
+    // ✅ CARREGA PETSHOP QUE VEIO DA TELA DO PET
+    _idPetshopSelecionado = widget.idPetshop;
+    _nomePetshopSelecionado = widget.nomePetshop;
+    _codigoPetshopController.text = widget.idPetshop?.toString() ?? '';
   }
 
   // ✅ ABRIR JANELA DE BUSCA DE PRODUTO
   Future<void> _escolherProduto() async {
-    setState(() => _salvando = true);
+    if (!mounted) return;
+
     try {
-      const idCategoria = 1;
+      final idCategoria = widget.idCategoria;
       final resposta = await http.get(
         Uri.parse('$apiBase/produtos/categoria/$idCategoria'),
       );
-      setState(() => _salvando = false);
-      if (!mounted) return;
+
+      if (!mounted) return; // ✅ PROTEÇÃO
 
       if (resposta.statusCode != 200) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -145,7 +154,6 @@ class _TelaLancamentoState extends State<TelaLancamento> {
         );
         return;
       }
-
       final List<dynamic> lista = json.decode(resposta.body);
       if (lista.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -153,7 +161,6 @@ class _TelaLancamentoState extends State<TelaLancamento> {
         );
         return;
       }
-
       final resultado = await showDialog<Map<String, dynamic>>(
         context: context,
         builder: (context) {
@@ -224,15 +231,14 @@ class _TelaLancamentoState extends State<TelaLancamento> {
           );
         },
       );
-
-      if (resultado != null) {
+      if (resultado != null && mounted) {
         setState(() {
           _nomeProduto = resultado['nome'];
           _idProduto = resultado['id'];
         });
       }
     } catch (e) {
-      setState(() => _salvando = false);
+      if (mounted) setState(() => _salvando = false); // ✅ PROTEÇÃO
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -241,7 +247,156 @@ class _TelaLancamentoState extends State<TelaLancamento> {
     }
   }
 
-  // ✅ CALCULAR PRÓXIMA DATA — CORRIGIDO COM VALIDAÇÃO
+  // ✅ BUSCA PETSHOP PELO CÓDIGO DIGITADO
+  Future<void> _buscarPetshopPorCodigo(String codigo) async {
+    if (codigo.trim().isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _nomePetshopSelecionado = null;
+        _idPetshopSelecionado = null;
+      });
+      return;
+    }
+    try {
+      final resposta = await http.get(Uri.parse('$apiBase/petshops/$codigo'));
+      if (!mounted) return;
+      if (resposta.statusCode == 200) {
+        final dados = json.decode(resposta.body);
+
+        if (!mounted) return;
+        setState(() {
+          _idPetshopSelecionado = dados['id'];
+          _nomePetshopSelecionado = dados['nomeFantasia'];
+        });
+      } else {
+        setState(() {
+          _nomePetshopSelecionado = null;
+          _idPetshopSelecionado = null;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _nomePetshopSelecionado = null;
+        _idPetshopSelecionado = null;
+      });
+    }
+  }
+
+  // ✅ ABRE LISTA PARA ESCOLHER PETSHOP
+  Future<void> _abrirListaPetshops() async {
+    List<dynamic> listaPetshops = [];
+    try {
+      final resposta = await http.get(Uri.parse('$apiBase/petshops'));
+      if (resposta.statusCode == 200) {
+        listaPetshops = json.decode(resposta.body);
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ Não foi possível carregar os PetShops'),
+          ),
+        );
+        return;
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('❌ Erro de conexão')));
+      return;
+    }
+
+    if (!mounted) return;
+    final resultado = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) {
+        String textoBusca = '';
+        List<dynamic> listaFiltrada = List.from(listaPetshops);
+        return StatefulBuilder(
+          builder: (context, atualizar) {
+            return AlertDialog(
+              title: const Text('🏪 Escolher PetShop'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        hintText: 'Digite para buscar...',
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (texto) {
+                        atualizar(() {
+                          textoBusca = texto;
+                          listaFiltrada = listaPetshops
+                              .where(
+                                (p) => p['nomeFantasia']
+                                    .toString()
+                                    .toLowerCase()
+                                    .contains(texto.toLowerCase()),
+                              )
+                              .toList();
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Flexible(
+                      child: listaFiltrada.isEmpty
+                          ? const Center(child: Text('Nenhum resultado'))
+                          : ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: listaFiltrada.length,
+                              itemBuilder: (context, i) {
+                                final ps = listaFiltrada[i];
+                                return ListTile(
+                                  title: Text(
+                                    ps['nomeFantasia'].toString(),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    '${ps['cidade'] ?? ''} - ${ps['bairro'] ?? ''}',
+                                  ),
+                                  onTap: () {
+                                    Navigator.pop(context, {
+                                      'id': ps['id'],
+                                      'nome': ps['nomeFantasia'].toString(),
+                                    });
+                                  },
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (resultado != null && mounted) {
+      setState(() {
+        _idPetshopSelecionado = resultado['id'];
+        _nomePetshopSelecionado = resultado['nome'];
+        _codigoPetshopController.text = resultado['id'].toString();
+      });
+    }
+  }
+
+  // ✅ CALCULAR PRÓXIMA DATA
   void _calcularProximaDose() {
     try {
       final textoData = _dataController.text.trim();
@@ -251,30 +406,22 @@ class _TelaLancamentoState extends State<TelaLancamento> {
         );
         return;
       }
-
       final partes = textoData.split('/');
-      if (partes.length != 3) {
-        throw Exception('Formato inválido');
-      }
-
+      if (partes.length != 3) throw Exception('Formato inválido');
       final dataBase = DateTime.parse('${partes[2]}-${partes[1]}-${partes[0]}');
-
       int anos = int.tryParse(_anosController.text) ?? 0;
       int meses = int.tryParse(_mesesController.text) ?? 0;
       int dias = int.tryParse(_diasController.text) ?? 0;
-
       DateTime proxima = DateTime(
         dataBase.year + anos,
         dataBase.month + meses,
         dataBase.day + dias,
       );
-
       _proximaDoseController.text =
           '${proxima.day.toString().padLeft(2, '0')}/'
           '${proxima.month.toString().padLeft(2, '0')}/'
           '${proxima.year}';
-
-      setState(() {});
+      if (mounted) setState(() {}); // ✅ PROTEÇÃO
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -286,26 +433,27 @@ class _TelaLancamentoState extends State<TelaLancamento> {
 
   // ✅ ESCOLHER FOTO
   Future<void> _escolherFoto(ImageSource origem) async {
+    if (!mounted) return;
     final XFile? escolhida = await _imagePicker.pickImage(
       source: origem,
       imageQuality: 70,
       maxWidth: 1000,
     );
     if (escolhida == null) return;
-    setState(() {
-      _foto = File(escolhida.path);
-      _carregandoFoto = false;
-    });
     if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('✅ Foto carregada!')));
+      // ✅ PROTEÇÃO
+      setState(() {
+        _foto = File(escolhida.path);
+        _carregandoFoto = false;
+      });
     }
   }
 
   // ✅ SALVAR LANÇAMENTO
   Future<void> _salvarLancamento() async {
-    // ✅ VALIDAÇÕES
+    if (_salvando) return;
+    if (!mounted) return;
+
     if (_idProduto == null || _nomeProduto == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('❌ Escolha o produto primeiro!')),
@@ -319,14 +467,12 @@ class _TelaLancamentoState extends State<TelaLancamento> {
       return;
     }
 
-    setState(() => _salvando = true);
+    if (mounted) setState(() => _salvando = true); // ✅ PROTEÇÃO
+
     try {
-      // ==========================================
-      // ✅ ENVIAR FOTO PARA A API — IGUALZINHO AO PET!
-      // ==========================================
       String? urlFotoGerada;
       if (_foto != null) {
-        debugPrint('📸 Tem foto selecionada! Enviando...');
+        debugPrint('📸 Enviando foto...');
         try {
           var requisicao = http.MultipartRequest(
             'POST',
@@ -336,32 +482,25 @@ class _TelaLancamentoState extends State<TelaLancamento> {
             await http.MultipartFile.fromPath('arquivo', _foto!.path),
           );
           final resposta = await requisicao.send();
-          debugPrint('☁️ Status da foto: ${resposta.statusCode}');
+          debugPrint('☁️ Status foto: ${resposta.statusCode}');
           if (resposta.statusCode == 200) {
             final corpo = await resposta.stream.bytesToString();
             final dados = json.decode(corpo);
-
-            // ✅ ==== GARANTE QUE A URL EXISTE ====
             if (dados['urlFoto'] != null) {
               urlFotoGerada = dados['urlFoto'];
               _urlFoto = urlFotoGerada;
-              debugPrint('✅ FOTO SALVA COM SUCESSO! URL: $_urlFoto');
+              debugPrint('✅ Foto salva! URL: $_urlFoto');
             }
-            // ✅ ==== FIM ====
           }
         } catch (e) {
-          debugPrint('❌ ERRO AO ENVIAR FOTO: $e');
+          debugPrint('❌ Erro ao enviar foto: $e');
         }
-      } else {
-        debugPrint('📸 Sem foto nova para enviar');
       }
-      // ==========================================
-      // ✅ CONVERTE DATA
+
       final partesData = _dataController.text.split('/');
       final dataFormatada =
           '${partesData[2]}-${partesData[1]}-${partesData[0]}';
 
-      // ✅ DATA DE REPETIR
       String? dataRepetir;
       if (_proximaDoseController.text.isNotEmpty) {
         final partesRepetir = _proximaDoseController.text.split('/');
@@ -369,8 +508,6 @@ class _TelaLancamentoState extends State<TelaLancamento> {
             '${partesRepetir[2]}-${partesRepetir[1]}-${partesRepetir[0]}';
       }
 
-      // ✅ MONTAR DADOS
-      // ✅ MONTA DADOS
       final Map<String, dynamic> dados = {
         'idPet': widget.idPet,
         'idProduto': _idProduto,
@@ -378,26 +515,21 @@ class _TelaLancamentoState extends State<TelaLancamento> {
         'observacao': _observacoesController.text.trim().toUpperCase(),
         'repetir': dataRepetir,
         'foto': _urlFoto,
-        'idPetshops': null,
+        'idPetshop': _idPetshopSelecionado,
       };
 
-      // ✅ SÓ INCLUI O ID ANTIGO SE TIVER — SEMPRE SEPARADO!
       if (widget.idLancamentoRepetido != null) {
         dados['idLancamentoRepetido'] = widget.idLancamentoRepetido;
       }
 
-      // ✅ NOVO LANÇAMENTO: SEM "Repetir em" = IGNORADO | PREENCHIDO = ATIVO
       if (_idLancamento == null) {
         dados['status'] = _proximaDoseController.text.trim().isEmpty
             ? 'IGNORADO'
             : 'ATIVO';
       }
 
-      debugPrint(
-        '📤 ENVIANDO PARA API: ${json.encode(dados)}',
-      ); // ✅ LOG IMPORTANTE!
+      debugPrint('📤 Enviando: ${json.encode(dados)}');
 
-      // ✅ ENVIAR
       final url = _idLancamento != null
           ? Uri.parse('$apiBase/lancamentos/$_idLancamento')
           : Uri.parse('$apiBase/lancamentos');
@@ -414,7 +546,7 @@ class _TelaLancamentoState extends State<TelaLancamento> {
               body: json.encode(dados),
             );
 
-      debugPrint('📥 RESPOSTA API: ${resposta.statusCode} - ${resposta.body}');
+      debugPrint('📥 Resposta: ${resposta.statusCode} - ${resposta.body}');
 
       if (resposta.statusCode == 200 || resposta.statusCode == 201) {
         if (mounted) {
@@ -430,14 +562,77 @@ class _TelaLancamentoState extends State<TelaLancamento> {
         throw Exception('Erro ao salvar');
       }
     } catch (e) {
-      debugPrint('❌ ERRO GERAL: $e');
+      debugPrint('❌ Erro geral: $e');
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('❌ Erro: $e')));
       }
     } finally {
-      if (mounted) setState(() => _salvando = false);
+      if (mounted) setState(() => _salvando = false); // ✅ PROTEÇÃO
+    }
+  }
+
+  // ✅ NOME DA CATEGORIA
+  String _obterNomeCategoria() {
+    switch (widget.idCategoria) {
+      case 1:
+        return '💉 Vacinas';
+      case 2:
+        return '🥩 Alimentação';
+      case 3:
+        return '💊 Saúde';
+      case 4:
+        return '🧴 Higiene';
+      case 5:
+        return '📦 Outros';
+      default:
+        return '📋 Lançamento';
+    }
+  }
+
+  // ✅ EXCLUIR LANÇAMENTO
+  Future<void> _confirmarExcluir() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Excluir Lançamento'),
+        content: const Text('Tem certeza que deseja excluir este lançamento?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmar == true) {
+      if (mounted) setState(() => _salvando = true);
+      try {
+        final resposta = await http.delete(
+          Uri.parse('$apiBase/lancamentos/$_idLancamento'),
+        );
+        if (resposta.statusCode == 200) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('✅ Excluído com sucesso!')),
+            );
+            Navigator.pop(context);
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('❌ Erro: $e')));
+        }
+      } finally {
+        if (mounted) setState(() => _salvando = false);
+      }
     }
   }
 
@@ -446,7 +641,8 @@ class _TelaLancamentoState extends State<TelaLancamento> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          _idLancamento != null ? 'Editar Lançamento' : 'Novo Lançamento',
+          _obterNomeCategoria() +
+              (_idLancamento != null ? ' - Editar' : ' - Novo'),
         ),
         backgroundColor: Cores.roxoEscuro,
         foregroundColor: Colors.white,
@@ -465,14 +661,18 @@ class _TelaLancamentoState extends State<TelaLancamento> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ✅ SELEÇÃO DO PRODUTO
+              // ✅ SELEÇÃO DE PRODUTO
               _nomeProduto == null
                   ? InkWell(
                       onTap: _salvando ? null : _escolherProduto,
-                      child: Padding(
+                      child: Container(
                         padding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                          horizontal: 4,
+                          vertical: 18,
+                          horizontal: 16,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3E5F5),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -480,7 +680,7 @@ class _TelaLancamentoState extends State<TelaLancamento> {
                             Text(
                               'Clique para selecionar',
                               style: TextStyle(
-                                fontSize: 16,
+                                fontSize: 18,
                                 color: Colors.grey[600],
                               ),
                             ),
@@ -488,47 +688,54 @@ class _TelaLancamentoState extends State<TelaLancamento> {
                             const Icon(
                               Icons.search,
                               color: Cores.roxoEscuro,
-                              size: 26,
+                              size: 28,
                             ),
                           ],
                         ),
                       ),
                     )
-                  : Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 12,
-                        horizontal: 4,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            _nomeProduto!,
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: Cores.roxoEscuro,
+                  : InkWell(
+                      onTap: _salvando ? null : _escolherProduto,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 18,
+                          horizontal: 16,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3E5F5),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _nomeProduto!,
+                                style: const TextStyle(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.bold,
+                                  color: Cores.roxoEscuro,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          InkWell(
-                            onTap: _escolherProduto,
-                            child: const Icon(
+                            const SizedBox(width: 12),
+                            const Icon(
                               Icons.search,
                               color: Cores.roxoEscuro,
-                              size: 28,
+                              size: 30,
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
-              // ✅ CAMPO DE DATA — ESTAVA FALTANDO! 🎯
+              // ✅ DATA
               TextField(
                 controller: _dataController,
                 decoration: const InputDecoration(
-                  labelText: '📅 Data',
+                  labelText: '📅 Data do Lançamento',
                   prefixIcon: Icon(Icons.calendar_today),
                   border: OutlineInputBorder(),
                   hintText: 'DD/MM/AAAA',
@@ -545,65 +752,98 @@ class _TelaLancamentoState extends State<TelaLancamento> {
                     }
                   } catch (_) {}
                   dataInicial ??= DateTime.now();
-
                   DateTime? escolhida = await showDatePicker(
                     context: context,
                     initialDate: dataInicial,
                     firstDate: DateTime(2020),
                     lastDate: DateTime(2035),
                   );
-                  if (escolhida != null) {
+                  if (escolhida != null && mounted) {
                     _dataController.text =
                         '${escolhida.day.toString().padLeft(2, '0')}/'
                         '${escolhida.month.toString().padLeft(2, '0')}/'
                         '${escolhida.year}';
-                    setState(() {});
+                    if (mounted) setState(() {});
                   }
                 },
                 readOnly: true,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
-              // ✅ OBSERVAÇÕES
-              TextField(
-                controller: _observacoesController,
-                decoration: const InputDecoration(
-                  labelText: 'Observações',
-                  prefixIcon: Icon(Icons.note),
-                  border: OutlineInputBorder(),
-                  alignLabelWithHint: true,
+              // ✅ CAMPO PETSHOP — MESMO FORMATO DA TELA DO PET
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
                 ),
-                maxLines: 3,
-                textCapitalization: TextCapitalization.characters,
-                inputFormatters: [UpperCaseTextFormatter()],
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3E5F5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Text(
+                      'PetShop: ',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Cores.roxoEscuro,
+                      ),
+                    ),
+                    // ✅ CÓDIGO + NOME OU CAMPO PARA DIGITAR
+                    Expanded(
+                      child: _nomePetshopSelecionado != null
+                          ? Text(
+                              '${_idPetshopSelecionado ?? widget.idPetshop} — $_nomePetshopSelecionado',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            )
+                          : TextField(
+                              controller: _codigoPetshopController,
+                              decoration: const InputDecoration(
+                                hintText: 'Código',
+                                border: InputBorder.none,
+                                counterText: '',
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(
+                                  vertical: 6,
+                                ),
+                              ),
+                              keyboardType: TextInputType.number,
+                              maxLength: 3,
+                              style: const TextStyle(fontSize: 15),
+                              onChanged: (valor) {
+                                if (valor.trim().length == 3) {
+                                  _buscarPetshopPorCodigo(valor.trim());
+                                }
+                              },
+                            ),
+                    ),
+                    // ✅ BOTÃO LUPA
+                    IconButton(
+                      icon: const Icon(Icons.search, color: Cores.roxoEscuro),
+                      onPressed: _salvando ? null : _abrirListaPetshops,
+                      tooltip: 'Buscar PetShop',
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
               // ✅ FOTO
               InkWell(
                 onTap: () {
-                  // ✅ SE JÁ TEM FOTO SALVA DA API → ABRE EM TELA CHEIA
-                  if (_urlFoto != null && _foto == null) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            TelaFotoCheiaUrl(urlFoto: _urlFoto!),
-                      ),
+                  Widget conteudoFoto;
+                  if (_urlFoto != null) {
+                    conteudoFoto = Image.network(
+                      _urlFoto!,
+                      fit: BoxFit.contain,
                     );
-                  }
-                  // ✅ SE É FOTO NOVA ESCOLHIDA → ABRE EM TELA CHEIA
-                  else if (_foto != null) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            TelaFotoCheia(arquivoFoto: _foto!),
-                      ),
-                    );
-                  }
-                  // ✅ NÃO TEM FOTO → ABRE OPÇÃO PARA ESCOLHER
-                  else {
+                  } else if (_foto != null) {
+                    conteudoFoto = Image.file(_foto!, fit: BoxFit.contain);
+                  } else {
                     showModalBottomSheet(
                       context: context,
                       builder: (context) => SafeArea(
@@ -630,12 +870,89 @@ class _TelaLancamentoState extends State<TelaLancamento> {
                         ),
                       ),
                     );
+                    return;
                   }
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => Scaffold(
+                        backgroundColor: Colors.black,
+                        appBar: AppBar(
+                          title: const Text(
+                            'Foto',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                          backgroundColor: Colors.black,
+                          iconTheme: const IconThemeData(color: Colors.white),
+                        ),
+                        body: Column(
+                          children: [
+                            Expanded(
+                              child: InteractiveViewer(
+                                child: Center(child: conteudoFoto),
+                              ),
+                            ),
+                            Container(
+                              color: Colors.black87,
+                              padding: const EdgeInsets.all(16),
+                              child: SafeArea(
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceEvenly,
+                                  children: [
+                                    Expanded(
+                                      child: TextButton.icon(
+                                        onPressed: () {
+                                          Navigator.pop(context);
+                                          _escolherFoto(ImageSource.camera);
+                                        },
+                                        icon: const Icon(
+                                          Icons.camera_alt,
+                                          color: Colors.white,
+                                        ),
+                                        label: const Text(
+                                          '📸 Tirar nova',
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                        style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.all(12),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: TextButton.icon(
+                                        onPressed: () {
+                                          Navigator.pop(context);
+                                          _escolherFoto(ImageSource.gallery);
+                                        },
+                                        icon: const Icon(
+                                          Icons.photo_library,
+                                          color: Colors.white,
+                                        ),
+                                        label: const Text(
+                                          '📂 Galeria',
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                        style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.all(12),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
                 },
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
                   width: double.infinity,
-                  height: 220,
+                  height: 140,
                   decoration: BoxDecoration(
                     color: Colors.grey[200],
                     borderRadius: BorderRadius.circular(12),
@@ -661,15 +978,15 @@ class _TelaLancamentoState extends State<TelaLancamento> {
                           children: [
                             Icon(
                               Icons.add_a_photo,
-                              size: 48,
+                              size: 40,
                               color: Cores.roxoEscuro,
                             ),
-                            SizedBox(height: 12),
+                            SizedBox(height: 8),
                             Text(
                               'Toque para adicionar foto',
                               style: TextStyle(
                                 color: Cores.roxoEscuro,
-                                fontSize: 16,
+                                fontSize: 15,
                               ),
                             ),
                           ],
@@ -678,107 +995,138 @@ class _TelaLancamentoState extends State<TelaLancamento> {
               ),
               const SizedBox(height: 24),
 
-              // ✅ CÁLCULO: ME LEMBRE EM...
-              const Text(
-                '⏰ Me lembre em:',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _anosController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Ano(s)',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: _mesesController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Mês(es)',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: _diasController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Dia(s)',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              // ✅ BOTÃO CALCULAR
-              ElevatedButton.icon(
-                onPressed: _calcularProximaDose,
-                icon: const Icon(Icons.calculate),
-                label: const Text('Calcular'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Cores.roxoEscuro,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+              // ✅ ME LEMBRE EM
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3E5F5),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Cores.roxoEscuro.withOpacity(0.3)),
                 ),
-              ),
-              const SizedBox(height: 16),
-
-              // ✅ REPETIR EM
-              TextField(
-                controller: _proximaDoseController,
-                decoration: const InputDecoration(
-                  labelText: '📅 Repetir em',
-                  prefixIcon: Icon(Icons.schedule),
-                  border: OutlineInputBorder(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      '⏰ Me lembre em:',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        color: Cores.roxoEscuro,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _anosController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Ano(s)',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: _mesesController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Mês(es)',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: _diasController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Dia(s)',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        SizedBox(
+                          height: 56,
+                          child: ElevatedButton(
+                            onPressed: _calcularProximaDose,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Cores.roxoEscuro,
+                              foregroundColor: Colors.white,
+                            ),
+                            child: const Icon(Icons.calculate, size: 20),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _proximaDoseController,
+                      decoration: const InputDecoration(
+                        labelText: '🔁 Repetir em',
+                        prefixIcon: Icon(
+                          Icons.schedule,
+                          color: Cores.roxoEscuro,
+                        ),
+                        border: OutlineInputBorder(),
+                      ),
+                      onTap: () async {
+                        DateTime? dataBase;
+                        try {
+                          final texto = _dataController.text.trim();
+                          if (texto.isNotEmpty) {
+                            final partes = texto.split('/');
+                            dataBase = DateTime.parse(
+                              '${partes[2]}-${partes[1]}-${partes[0]}',
+                            );
+                          }
+                        } catch (_) {}
+                        dataBase ??= DateTime.now();
+                        DateTime? escolhida = await showDatePicker(
+                          context: context,
+                          initialDate: dataBase,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2035),
+                        );
+                        if (escolhida != null && mounted) {
+                          _proximaDoseController.text =
+                              '${escolhida.day.toString().padLeft(2, '0')}/'
+                              '${escolhida.month.toString().padLeft(2, '0')}/'
+                              '${escolhida.year}';
+                          setState(() {});
+                        }
+                      },
+                      readOnly: true,
+                    ),
+                  ],
                 ),
-                onTap: () async {
-                  DateTime? dataBase;
-                  try {
-                    final texto = _dataController.text.trim();
-                    if (texto.isNotEmpty) {
-                      final partes = texto.split('/');
-                      dataBase = DateTime.parse(
-                        '${partes[2]}-${partes[1]}-${partes[0]}',
-                      );
-                    }
-                  } catch (_) {}
-                  dataBase ??= DateTime.now();
-
-                  DateTime? escolhida = await showDatePicker(
-                    context: context,
-                    initialDate: dataBase,
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime(2035),
-                  );
-                  if (escolhida != null) {
-                    _proximaDoseController.text =
-                        '${escolhida.day.toString().padLeft(2, '0')}/'
-                        '${escolhida.month.toString().padLeft(2, '0')}/'
-                        '${escolhida.year}';
-                    setState(() {});
-                  }
-                },
-                readOnly: true,
               ),
               const SizedBox(height: 24),
+
+              // ✅ OBSERVAÇÕES
+              TextField(
+                controller: _observacoesController,
+                decoration: const InputDecoration(
+                  labelText: '📝 Observações',
+                  prefixIcon: Icon(Icons.note),
+                  border: OutlineInputBorder(),
+                  alignLabelWithHint: true,
+                ),
+                maxLines: 3,
+                textCapitalization: TextCapitalization.characters,
+                inputFormatters: [UpperCaseTextFormatter()],
+              ),
+              const SizedBox(height: 28),
 
               // ✅ BOTÃO SALVAR
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: _salvando ? null : _salvarLancamento,
+                  onPressed: _salvando ? null : () => _salvarLancamento(),
                   icon: _salvando
                       ? const SizedBox(
                           width: 20,
@@ -806,98 +1154,6 @@ class _TelaLancamentoState extends State<TelaLancamento> {
               const SizedBox(height: 40),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  // ✅ CONFIRMAR EXCLUSÃO
-  Future<void> _confirmarExcluir() async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Excluir Lançamento'),
-        content: const Text('Tem certeza que deseja excluir este lançamento?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmar == true) {
-      setState(() => _salvando = true);
-      try {
-        final resposta = await http.delete(
-          Uri.parse('$apiBase/lancamentos/$_idLancamento'),
-        );
-        if (resposta.statusCode == 200) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('✅ Excluído com sucesso!')),
-            );
-            Navigator.pop(context);
-          }
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('❌ Erro: $e')));
-        }
-      } finally {
-        if (mounted) setState(() => _salvando = false);
-      }
-    }
-  }
-}
-
-// ✅ TELA DE FOTO EM TELA CHEIA
-class TelaFotoCheia extends StatelessWidget {
-  final File arquivoFoto;
-  const TelaFotoCheia({super.key, required this.arquivoFoto});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text('Foto'),
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-      ),
-      body: Center(
-        child: InteractiveViewer(
-          child: Image.file(arquivoFoto, fit: BoxFit.contain),
-        ),
-      ),
-    );
-  }
-}
-
-// ✅ TELA DE FOTO EM TELA CHEIA — PARA FOTOS DA INTERNET (URL)
-class TelaFotoCheiaUrl extends StatelessWidget {
-  final String urlFoto;
-  const TelaFotoCheiaUrl({super.key, required this.urlFoto});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text('Foto'),
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-      ),
-      body: Center(
-        child: InteractiveViewer(
-          child: Image.network(urlFoto, fit: BoxFit.contain),
         ),
       ),
     );

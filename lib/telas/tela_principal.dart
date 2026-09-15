@@ -8,6 +8,7 @@ import 'dart:convert';
 class TelaPrincipal extends StatefulWidget {
   final dynamic idTutor;
   final String nomeTutor;
+
   const TelaPrincipal({
     super.key,
     required this.idTutor,
@@ -144,6 +145,8 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                           padding: EdgeInsets.zero,
                           children: List.generate(_listaPets.length, (i) {
                             final pet = _listaPets[i];
+                            print('🔍 DADOS COMPLETOS DO PET: $pet');
+
                             // ✅ ==== TODO O SEU CÓDIGO (nome, raça, idade, foto) CONTINUA IGUAL AQUI ====
                             final nomePet = pet['nome'] ?? 'Sem nome';
                             String nomeRaca = 'Raça não informada';
@@ -215,7 +218,9 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                                 ),
                               ),
                               child: InkWell(
-                                // ✅ TODO O RESTO DO CARD → ABRE TELA_PRODUTOS
+                                borderRadius: BorderRadius.circular(16),
+                                highlightColor: Colors.transparent,
+                                splashColor: Cores.roxoClaro.withOpacity(0.2),
                                 onTap: () {
                                   Navigator.push(
                                     context,
@@ -225,13 +230,12 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                                             pet['nome']?.toString() ??
                                             'Sem nome',
                                         idPet: pet['id'],
+                                        idPetshop:
+                                            pet['idPetshop'], // ✅ COM UNDERLINE!
                                       ),
                                     ),
                                   );
                                 },
-                                borderRadius: BorderRadius.circular(16),
-                                highlightColor: Colors.transparent,
-                                splashColor: Cores.roxoClaro.withOpacity(0.2),
                                 child: Padding(
                                   padding: const EdgeInsets.all(12),
                                   child: Column(
@@ -266,7 +270,6 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                                                 size: 36,
                                               ),
                                       ),
-
                                       // ✅ ⋯ PONTINHOS ABAIXO DA FOTO → CLICA E EDITA
                                       InkWell(
                                         onTap: () {

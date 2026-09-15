@@ -8,165 +8,142 @@ import 'package:flutter/services.dart';
 
 class TelaCadastroPet extends StatefulWidget {
   final dynamic idTutor;
-  final dynamic pet; // ✅ NOVO — recebe os dados para edição
-
-  const TelaCadastroPet({
-    super.key,
-    required this.idTutor,
-    this.pet, // ✅ OPCIONAL — se vier = edição, se não = cadastro
-  });
-
+  final dynamic pet;
+  const TelaCadastroPet({super.key, required this.idTutor, this.pet});
   @override
   State<TelaCadastroPet> createState() => _TelaCadastroPetState();
 }
 
 class _TelaCadastroPetState extends State<TelaCadastroPet> {
-  // 📝 Controladores
   final _nomeController = TextEditingController();
   final _nascimentoController = TextEditingController();
   final _anosController = TextEditingController();
   final _mesesController = TextEditingController();
   final _observacoesController = TextEditingController();
+  final _codigoPetshopController = TextEditingController();
 
-  // 📦 Dados
   String? _urlFoto;
+  String? _nomePetshopSelecionado;
+  dynamic _idPetshopSelecionado; // ✅ ID do Petshop para salvar
   DateTime? _dataNascimento;
   List<dynamic> _listaRacas = [];
   String? _racaSelecionadaNome;
   dynamic _racaSelecionadaId;
   String _sexo = '';
-  bool _castrado = false; // ☐ Desmarcado por padrão
+  bool _castrado = false;
   bool _falecido = false;
   bool _carregando = false;
   bool _carregandoRacas = true;
-
-  // ✅ ==== ESPÉCIE ====
   List<dynamic> _listaEspecies = [];
   String? _especieSelecionadaNome;
   dynamic _especieSelecionadaId;
   bool _carregandoEspecies = true;
-  dynamic _idPet; // ✅ GUARDA O ID QUANDO FOR EDIÇÃO
-
-  // 🖼️ Imagem
+  dynamic _idPet;
   final ImagePicker _imagePicker = ImagePicker();
   File? _arquivoFoto;
 
   @override
   void initState() {
     super.initState();
-    _carregarRacas();
-    _carregarEspecies(); // ✅ ==== NOVA LINHA ====
-
-    // ✅ SE VIER DADOS DO PET → PREENCHE OS CAMPOS
-    if (widget.pet != null) {
-      _preencherDadosParaEdicao();
-    }
+    // ✅ PRIMEIRO CARREGA TODAS AS LISTAS
+    _carregarRacas().then((_) {
+      _carregarEspecies().then((_) {
+        // ✅ SÓ DEPOIS PREENCHE OS DADOS DA EDIÇÃO
+        if (widget.pet != null) {
+          _preencherDadosParaEdicao();
+        }
+      });
+    });
   }
 
-  // ✅ PREENCHE TODOS OS CAMPOS PARA EDIÇÃO
   void _preencherDadosParaEdicao() {
     final pet = widget.pet;
-    debugPrint(
-      '🔍 ID Espécie do Pet: ${pet['idEspecie']}',
-    ); // ✅ MOSTRA O ID NO CONSOLE
-    _idPet = pet['id']; // ✅ GUARDA O ID PARA SABER QUE É EDIÇÃO
-
-    // Nome
+    debugPrint('🔍 ID Espécie do Pet: ${pet['idEspecie']}');
+    _idPet = pet['id'];
     _nomeController.text = pet['nome']?.toString() ?? '';
 
-    // Nascimento
     if (pet['nascimento'] != null && pet['nascimento'].toString().isNotEmpty) {
       _dataNascimento = DateTime.parse(pet['nascimento'].toString());
       _nascimentoController.text =
           "${_dataNascimento!.day}/${_dataNascimento!.month}/${_dataNascimento!.year}";
     }
 
-    // Raça
     if (pet['idRaca'] != null) {
       _racaSelecionadaId = pet['idRaca'];
-      // Nome da raça vai aparecer quando carregar a lista
+      // ✅ BUSCA E EXIBE O NOME DA RAÇA NA EDIÇÃO
+      for (var raca in _listaRacas) {
+        if (raca['id'] == _racaSelecionadaId) {
+          _racaSelecionadaNome = raca['nome'];
+          break;
+        }
+      }
     }
 
-    // Sexo
+    // ✅ ==== AQUI VAMOS ADICIONAR O CARREGAMENTO DO PETSHOP ====
+    if (pet['idPetshop'] != null) {
+      _idPetshopSelecionado = pet['idPetshop'];
+      _codigoPetshopController.text = _idPetshopSelecionado.toString();
+      // ✅ Busca o nome do Petshop automaticamente
+      _buscarPetshopPorCodigo(_idPetshopSelecionado.toString());
+    }
+
+    if (pet['idEspecie'] != null) {
+      final idEspeciePet = pet['idEspecie'];
+      for (var e in _listaEspecies) {
+        if (e['id'] == idEspeciePet) {
+          _especieSelecionadaId = e['id'];
+          _especieSelecionadaNome =
+              e['nomeEspecie']?.toString() ?? e['nome']?.toString();
+          break;
+        }
+      }
+    }
+
     _sexo = pet['sexo']?.toString() ?? '';
-
-    // Castrado
     _castrado = pet['castrado'] == true;
-
-    // Falecido
     _falecido = pet['falecido'] == true;
 
-    // Foto
-    // ✅ FOTO — CORRIGIDO
     final String? fotoUrl = pet['foto']?.toString();
     if (fotoUrl != null && fotoUrl.isNotEmpty) {
       _urlFoto = fotoUrl;
-      debugPrint('✅ FOTO CARREGADA: $_urlFoto'); // ✅ MOSTRA NO CONSOLE
     } else {
       _urlFoto = null;
-      debugPrint('⚠️ SEM FOTO: campo veio vazio ou nulo');
     }
 
-    // Observações
     _observacoesController.text = pet['observacoes']?.toString() ?? '';
   }
 
-  // ✅ Buscar lista de Raças na API
   Future<void> _carregarRacas() async {
     try {
       final resposta = await http.get(Uri.parse('$apiBase/racas'));
       if (resposta.statusCode == 200) {
+        if (!mounted) return;
         setState(() {
           _listaRacas = json.decode(resposta.body);
           _carregandoRacas = false;
         });
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => _carregandoRacas = false);
       _mensagem('⚠️ Erro ao carregar raças', Colors.orange);
     }
   }
 
-  // ✅ ==== BUSCAR LISTA DE ESPÉCIES ====
   Future<void> _carregarEspecies() async {
     try {
       final resposta = await http.get(Uri.parse('$apiBase/especies'));
       if (resposta.statusCode == 200) {
         _listaEspecies = json.decode(resposta.body);
-
-        // ✅ SE ESTIVERMOS EDITANDO → BUSCA A ESPÉCIE
-        if (widget.pet != null) {
-          final idEspeciePet = widget.pet['idEspecie'];
-          debugPrint(
-            '🔍 ID Espécie do Pet: $idEspeciePet',
-          ); // ✅ MOSTRA NO CONSOLE
-
-          if (idEspeciePet != null) {
-            for (var e in _listaEspecies) {
-              if (e['id'] == idEspeciePet) {
-                _especieSelecionadaId = e['id'];
-                _especieSelecionadaNome =
-                    e['nomeEspecie']?.toString() ?? e['nome']?.toString();
-                debugPrint(
-                  '✅ Espécie encontrada: $_especieSelecionadaNome',
-                ); // ✅ MOSTRA NO CONSOLE
-                break;
-              }
-            }
-          }
-        }
-
-        setState(() {
-          _carregandoEspecies = false;
-        });
+        if (!mounted) return;
+        setState(() => _carregandoEspecies = false);
       }
     } catch (e) {
-      debugPrint('❌ Erro ao carregar espécies: $e');
+      if (!mounted) return;
       setState(() => _carregandoEspecies = false);
     }
   }
 
-  // ✅ ==== SELECIONAR ESPÉCIE COM BUSCA ====
   void _selecionarEspecie() async {
     await showDialog(
       context: context,
@@ -175,10 +152,11 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             final filtradas = _listaEspecies.where((especie) {
-              final nome = especie['nomeEspecie'].toString().toLowerCase();
+              final nome = (especie['nomeEspecie'] ?? '')
+                  .toString()
+                  .toLowerCase();
               return nome.contains(filtro.toLowerCase());
             }).toList();
-
             return AlertDialog(
               title: const Text('Selecionar Espécie'),
               content: SizedBox(
@@ -203,8 +181,9 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
                               itemBuilder: (context, i) {
                                 final especie = filtradas[i];
                                 return ListTile(
-                                  title: Text(especie['nomeEspecie']),
+                                  title: Text(especie['nomeEspecie'] ?? ''),
                                   onTap: () {
+                                    if (!mounted) return;
                                     setState(() {
                                       _especieSelecionadaId = especie['id'];
                                       _especieSelecionadaNome =
@@ -226,45 +205,69 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
     );
   }
 
-  // ✅ Calcular Data a partir de Anos e Meses
   void _calcularNascimento() {
     final anos = int.tryParse(_anosController.text) ?? 0;
     final meses = int.tryParse(_mesesController.text) ?? 0;
-
     if (anos == 0 && meses == 0) {
       _mensagem('⚠️ Informe os anos e/ou meses', Colors.orange);
       return;
     }
-
     DateTime hoje = DateTime.now();
     _dataNascimento = DateTime(hoje.year - anos, hoje.month - meses, hoje.day);
-
     _nascimentoController.text =
         "${_dataNascimento!.day.toString().padLeft(2, '0')}/${_dataNascimento!.month.toString().padLeft(2, '0')}/${_dataNascimento!.year}";
     _mensagem('✅ Data calculada!', const Color(0xFF512DA8));
   }
 
-  // ✅ Escolher Foto
+  // ✅ FOTO — ESCOLHER ORIGEM: CÂMERA OU GALERIA
   Future<void> _escolherFoto() async {
-    try {
-      final XFile? selecionada = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 75, // ✅ Reduz qualidade para 75% — leve e boa!
-        maxWidth: 1024, // ✅ Largura máxima de 1024 pixels
-        maxHeight: 1024, // ✅ Altura máxima de 1024 pixels
-      );
-      if (selecionada != null) {
-        setState(() => _arquivoFoto = File(selecionada.path));
-      }
-    } catch (e) {
-      _mensagem('❌ Erro ao escolher foto', Colors.red);
-    }
+    await showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Tirar foto com a câmera'),
+              onTap: () async {
+                Navigator.pop(context);
+                final XFile? foto = await _imagePicker.pickImage(
+                  source: ImageSource.camera,
+                  imageQuality: 75,
+                  maxWidth: 1024,
+                  maxHeight: 1024,
+                );
+                if (foto != null) {
+                  if (!mounted) return;
+                  setState(() => _arquivoFoto = File(foto.path));
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Escolher da galeria'),
+              onTap: () async {
+                Navigator.pop(context);
+                final XFile? foto = await _imagePicker.pickImage(
+                  source: ImageSource.gallery,
+                  imageQuality: 75,
+                  maxWidth: 1024,
+                  maxHeight: 1024,
+                );
+                if (foto != null) {
+                  setState(() => _arquivoFoto = File(foto.path));
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
-  // ✅ Enviar Foto para Cloudinary pela API
   Future<String?> _enviarFoto() async {
     if (_arquivoFoto == null) return null;
-
     try {
       var requisicao = http.MultipartRequest(
         'POST',
@@ -274,7 +277,6 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
         await http.MultipartFile.fromPath('arquivo', _arquivoFoto!.path),
       );
       final resposta = await requisicao.send();
-
       if (resposta.statusCode == 200) {
         final corpo = await resposta.stream.bytesToString();
         final dados = json.decode(corpo);
@@ -286,14 +288,158 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
     return null;
   }
 
-  // ✅ Salvar Pet
+  // ✅ BUSCA POR CÓDIGO — SÓ AVISA SE NÃO ENCONTRAR
+  Future<void> _buscarPetshopPorCodigo(String codigo) async {
+    if (codigo.trim().isEmpty) {
+      if (!mounted) return; // ← ✅ ADICIONA ESTA LINHA
+      setState(() {
+        _nomePetshopSelecionado = null;
+        _idPetshopSelecionado = null;
+      });
+      return;
+    }
+
+    try {
+      final resposta = await http.get(Uri.parse('$apiBase/petshops/$codigo'));
+
+      if (resposta.statusCode == 200) {
+        final dados = json.decode(resposta.body);
+        if (!mounted) return; // ← ✅ ADICIONA ESTA LINHA
+        setState(() {
+          _idPetshopSelecionado = dados['id'];
+          _nomePetshopSelecionado = dados['nomeFantasia'];
+        });
+        // ✅ SEM NENHUMA MENSAGEM QUANDO ENCONTRA
+      } else {
+        // ❌ SÓ AVISA SE NÃO ENCONTRAR
+        if (!mounted) return; // ← ✅ ADICIONA ESTA LINHA
+        setState(() {
+          _nomePetshopSelecionado = null;
+          _idPetshopSelecionado = null;
+          _codigoPetshopController.text = '';
+        });
+        _mensagem(
+          '⚠️ PetShop não encontrado! Verifique o código ou busque pelo nome.',
+          Colors.orange,
+        );
+      }
+    } catch (e) {
+      if (!mounted) return; // ← COLOCA ESSA LINHA ABAIXO DO {
+      setState(() {
+        _nomePetshopSelecionado = null;
+        _idPetshopSelecionado = null;
+        _codigoPetshopController.text = '';
+      });
+      _mensagem('⚠️ Erro ao buscar', Colors.red);
+    }
+  }
+
+  // ✅ 2 — ABRE LISTA PARA BUSCAR PELO NOME
+  Future<void> _abrirListaPetshops() async {
+    List<dynamic> listaPetshops = [];
+    try {
+      final resposta = await http.get(Uri.parse('$apiBase/petshops'));
+      if (resposta.statusCode == 200) {
+        listaPetshops = json.decode(resposta.body);
+      } else {
+        _mensagem('❌ Não foi possível carregar os petshops', Colors.red);
+        return;
+      }
+    } catch (e) {
+      _mensagem('❌ Erro de conexão', Colors.red);
+      return;
+    }
+
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        String filtro = '';
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final filtrados = listaPetshops.where((ps) {
+              final nome = (ps['nomeFantasia'] ?? '').toString().toLowerCase();
+              return nome.contains(filtro.toLowerCase());
+            }).toList();
+
+            return AlertDialog(
+              title: const Text('Selecionar Petshop'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      decoration: const InputDecoration(
+                        labelText: '🔍 Buscar pelo nome',
+                      ),
+                      onChanged: (valor) =>
+                          setDialogState(() => filtro = valor),
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: filtrados.isEmpty
+                          ? const Text('Nenhum petshop encontrado')
+                          : ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: filtrados.length,
+                              itemBuilder: (context, i) {
+                                final ps = filtrados[i];
+                                final nome = ps['nomeFantasia'] ?? '';
+                                final cidade = ps['cidade'] ?? '';
+                                final bairro = ps['bairro'] ?? '';
+                                final endereco = ps['endereco'] ?? '';
+                                String linhaEndereco = '';
+                                if (cidade.isNotEmpty && bairro.isNotEmpty) {
+                                  linhaEndereco = '$cidade — $bairro';
+                                } else if (cidade.isNotEmpty) {
+                                  linhaEndereco = cidade;
+                                } else if (endereco.isNotEmpty) {
+                                  linhaEndereco = endereco;
+                                } else {
+                                  linhaEndereco = 'Sem endereço';
+                                }
+                                return ListTile(
+                                  title: Text(
+                                    nome,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    linhaEndereco,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  onTap: () {
+                                    if (!mounted) return; // ← COLOCA ESTA LINHA
+                                    setState(() {
+                                      _idPetshopSelecionado = ps['id'];
+                                      _codigoPetshopController.text = ps['id']
+                                          .toString();
+                                      _nomePetshopSelecionado = nome;
+                                    });
+                                    Navigator.pop(context);
+                                  },
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _salvar() async {
-    // Validações
     if (_especieSelecionadaId == null) {
       _mensagem('❌ Selecione a espécie', Colors.red);
       return;
     }
-
     final nome = _nomeController.text.trim();
     if (nome.isEmpty) {
       _mensagem('❌ Nome é obrigatório', Colors.red);
@@ -311,23 +457,20 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
       _mensagem('❌ Selecione o sexo', Colors.red);
       return;
     }
-
+    if (!mounted) return;
     setState(() => _carregando = true);
 
     try {
-      // Envia foto primeiro (se houver)
       _urlFoto = await _enviarFoto();
 
-      // Prepara a data
       String? dataNascimentoStr;
       if (_dataNascimento != null) {
         dataNascimentoStr =
             "${_dataNascimento!.year}-${_dataNascimento!.month.toString().padLeft(2, '0')}-${_dataNascimento!.day.toString().padLeft(2, '0')}";
       }
 
-      // Envia os dados do Pet
       final dados = {
-        "idEspecie": _especieSelecionadaId, // ✅ ==== NOVA LINHA ====
+        "idEspecie": _especieSelecionadaId,
         "nome": nome,
         "nascimento": dataNascimentoStr,
         "idRaca": _racaSelecionadaId,
@@ -337,19 +480,17 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
         "foto": _urlFoto,
         "observacoes": _observacoesController.text.trim(),
         "idTutor": widget.idTutor,
+        "idPetshop": _idPetshopSelecionado, // ✅ SALVA O ID DO PETSHOP
       };
 
-      // ✅ SE TEM ID = EDIÇÃO | SE NÃO TEM = CADASTRO NOVO
       final resposta;
       if (_idPet != null) {
-        // ✅ MODO EDIÇÃO → ATUALIZA
         resposta = await http.put(
           Uri.parse('$apiBase/pets/$_idPet'),
           headers: {'Content-Type': 'application/json'},
           body: json.encode(dados),
         );
       } else {
-        // ✅ MODO CADASTRO → NOVO
         resposta = await http.post(
           Uri.parse('$apiBase/pets'),
           headers: {'Content-Type': 'application/json'},
@@ -357,7 +498,6 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
         );
       }
 
-      // ✅ ACEITA 201 (novo) E 200 (edição)
       if ((_idPet == null && resposta.statusCode == 201) ||
           (_idPet != null && resposta.statusCode == 200)) {
         _mensagem(
@@ -366,7 +506,7 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
               : '✅ Pet atualizado!',
           const Color(0xFF512DA8),
         );
-        Navigator.pop(context, true);
+        if (mounted) Navigator.pop(context, true);
       } else {
         final corpo = json.decode(resposta.body);
         _mensagem(corpo['erro'] ?? '❌ Erro', Colors.red);
@@ -374,13 +514,11 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
     } catch (e) {
       _mensagem('⚠️ Erro de conexão: $e', Colors.red);
     } finally {
-      setState(() => _carregando = false);
+      if (mounted) setState(() => _carregando = false);
     }
   }
 
-  // ✅ ==== EXCLUIR PET ====
   Future<void> _confirmarExclusao() async {
-    // 🚨 CAIXA DE CONFIRMAÇÃO
     final bool? confirma = await showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -401,32 +539,28 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
         ],
       ),
     );
-
-    // ✅ SE CONFIRMOU → EXCLUI
     if (confirma == true) {
+      if (!mounted) return;
       setState(() => _carregando = true);
       try {
         final resposta = await http.delete(
           Uri.parse('$apiBase/pets/$_idPet'),
           headers: {'Content-Type': 'application/json'},
         );
-
         if (resposta.statusCode == 200 || resposta.statusCode == 204) {
           _mensagem('✅ Pet excluído com sucesso!', const Color(0xFF512DA8));
-          // ✅ VOLTA PARA A LISTA E ATUALIZA
-          Navigator.pop(context, true);
+          if (mounted) Navigator.pop(context, true);
         } else {
           _mensagem('❌ Não foi possível excluir', Colors.red);
         }
       } catch (e) {
         _mensagem('⚠️ Erro de conexão', Colors.red);
       } finally {
-        setState(() => _carregando = false);
+        if (mounted) setState(() => _carregando = false);
       }
     }
   }
 
-  // ✅ Mensagem
   void _mensagem(String texto, Color cor) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -437,7 +571,6 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
     );
   }
 
-  // ✅ Selecionar Raça com Busca
   void _selecionarRaca() async {
     await showDialog(
       context: context,
@@ -449,7 +582,6 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
               final nome = raca['nome'].toString().toLowerCase();
               return nome.contains(filtro.toLowerCase());
             }).toList();
-
             return AlertDialog(
               title: const Text('Selecionar Raça'),
               content: SizedBox(
@@ -500,17 +632,45 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_idPet == null ? 'Cadastrar Pet' : 'Editar Pet'),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(_idPet == null ? 'Cadastrar Pet' : 'Editar Pet'),
+            ),
+            // ✅ STATUS ATIVO/INATIVO DIRETO NO CABEÇALHO
+            TextButton(
+              onPressed: () => setState(() => _falecido = !_falecido),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _falecido ? Icons.cancel : Icons.check_circle,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _falecido ? 'Inativo' : 'Ativo',
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
         backgroundColor: const Color(0xFF512DA8),
         foregroundColor: Colors.white,
-        // ✅ ==== AÇÕES NO CANTO DIREITO ====
         actions: [
-          // ✅ SÓ MOSTRA O ÍCONE EXCLUIR QUANDO FOR EDIÇÃO
           if (_idPet != null)
             IconButton(
               icon: const Icon(Icons.delete, color: Colors.white),
               tooltip: 'Excluir Pet',
-              onPressed: _confirmarExclusao, // ✅ ==== PRECISA ESTÁ ASSIM! ====
+              onPressed: _confirmarExclusao,
             ),
         ],
       ),
@@ -519,7 +679,76 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 🐾 ESPÉCIE *
+            // ======================================
+            // 📸 TOPO: FOTO CLICÁVEL + NOME EM NEGRITO
+            // ======================================
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                InkWell(
+                  onTap: _escolherFoto,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade400),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: _arquivoFoto != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(_arquivoFoto!, fit: BoxFit.cover),
+                          )
+                        : (_urlFoto != null && _urlFoto!.isNotEmpty)
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              _urlFoto!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, erro, stackTrace) =>
+                                  const Icon(
+                                    Icons.add_a_photo,
+                                    size: 28,
+                                    color: Colors.grey,
+                                  ),
+                            ),
+                          )
+                        : const Icon(
+                            Icons.add_a_photo,
+                            size: 28,
+                            color: Colors.grey,
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextField(
+                    controller: _nomeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Nome do Pet *',
+                      border: OutlineInputBorder(),
+                    ),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                    textCapitalization: TextCapitalization.characters,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                        RegExp(r'[a-zA-ZáéíóúÁÉÍÓÚàâãÀÂÃçÇ ]'),
+                      ),
+                      UpperCaseTextFormatter(),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // ======================================
+            // 🐾 ESPÉCIE
+            // ======================================
             InkWell(
               onTap: _carregandoEspecies ? null : _selecionarEspecie,
               child: InputDecorator(
@@ -533,24 +762,25 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
             ),
             const SizedBox(height: 16),
 
-            // 📝 NOME
-            TextField(
-              controller: _nomeController,
-              decoration: const InputDecoration(
-                labelText: 'Nome do Pet *',
-                border: OutlineInputBorder(),
-              ),
-              textCapitalization: TextCapitalization.characters,
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(
-                  RegExp(r'[a-zA-ZáéíóúÁÉÍÓÚàâãÀÂÃçÇ ]'),
+            // ======================================
+            // 🐶 RAÇA
+            // ======================================
+            InkWell(
+              onTap: _carregandoRacas ? null : _selecionarRaca,
+              child: InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Raça *',
+                  border: OutlineInputBorder(),
+                  suffixIcon: Icon(Icons.search),
                 ),
-                UpperCaseTextFormatter(), // ✅ FORÇA MAIÚSCULAS
-              ],
+                child: Text(_racaSelecionadaNome ?? 'Toque para selecionar'),
+              ),
             ),
             const SizedBox(height: 16),
 
+            // ======================================
             // 📅 DATA DE NASCIMENTO
+            // ======================================
             TextField(
               controller: _nascimentoController,
               decoration: const InputDecoration(
@@ -567,66 +797,81 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
                   lastDate: DateTime.now(),
                 );
                 if (escolhida != null) {
-                  _dataNascimento = escolhida;
-                  _nascimentoController.text =
-                      "${escolhida.day.toString().padLeft(2, '0')}/${escolhida.month.toString().padLeft(2, '0')}/${escolhida.year}";
+                  setState(() {
+                    _dataNascimento = escolhida;
+                    _nascimentoController.text =
+                        "${escolhida.day.toString().padLeft(2, '0')}/${escolhida.month.toString().padLeft(2, '0')}/${escolhida.year}";
+                  });
                 }
               },
             ),
             const SizedBox(height: 12),
 
-            // 🔢 CALCULAR IDADE
-            const Text(
-              'Ou calcular pela idade:',
-              style: TextStyle(fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _anosController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Anos'),
+            // ======================================
+            // 📦 IDADE
+            // ======================================
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                border: Border.all(color: Colors.grey.shade400),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Calcular data de nascimento pela idade aproximada:',
+                    style: TextStyle(fontWeight: FontWeight.w500),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _mesesController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Meses'),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _anosController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Anos',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: _mesesController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Meses',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        onPressed: _calcularNascimento,
+                        icon: const Icon(Icons.calculate),
+                        label: const Text('Calcular'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF512DA8),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 12),
-                ElevatedButton.icon(
-                  onPressed: _calcularNascimento,
-                  icon: const Icon(Icons.calculate),
-                  label: const Text('Calcular'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF512DA8),
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // 🐶 RAÇA COM BUSCA
-            InkWell(
-              onTap: _carregandoRacas ? null : _selecionarRaca,
-              child: InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Raça *',
-                  border: OutlineInputBorder(),
-                  suffixIcon: Icon(Icons.search),
-                ),
-                child: Text(_racaSelecionadaNome ?? 'Toque para selecionar'),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
 
+            // ======================================
             // ♂️ SEXO
+            // ======================================
             const Text('Sexo *', style: TextStyle(fontWeight: FontWeight.w500)),
             Row(
               children: [
@@ -650,83 +895,81 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
             ),
             const SizedBox(height: 8),
 
+            // ======================================
             // ✅ CASTRADO
-            // ✅ CASTRADO — Switch Liga/Desliza
+            // ======================================
             SwitchListTile(
               title: Text(_castrado ? 'Castrado' : 'Não Castrado'),
               value: _castrado,
               onChanged: (valor) => setState(() => _castrado = valor),
-              activeColor: const Color(0xFF512DA8), // 💜 Roxo quando LIGADO
+              activeColor: const Color(0xFF512DA8),
               inactiveThumbColor: Colors.grey,
             ),
+            const SizedBox(height: 20),
 
-            // ✅ SITUAÇÃO — Cadastro Ativo / Inativo
-            // ✅ SITUAÇÃO — Ativo / Inativo
-            SwitchListTile(
-              title: Text(!_falecido ? 'Cadastro Ativo' : 'Cadastro Inativo'),
-              value: !_falecido, // ✅ Ligado = Ativo
-              onChanged: (valor) => setState(() => _falecido = !valor),
-              activeColor: const Color(0xFF512DA8), // 💜 Roxo quando LIGADO
-              inactiveThumbColor: Colors.grey,
-            ),
-            const SizedBox(height: 16),
-
-            // 🖼️ FOTO
+            // ======================================
+            // 🏪 PETSHOP FAVORITO — UM SÓ CAMPO + LUPA 🔍
+            // ======================================
+            // ======================================
+            // 🏪 PETSHOP FAVORITO — UM SÓ CAMPO + LUPA 🔍
+            // ======================================
             InkWell(
-              onTap: _escolherFoto,
-              child: Container(
-                height: 150,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade400),
-                  borderRadius: BorderRadius.circular(8),
+              onTap: _abrirListaPetshops,
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  labelText: 'PetShop Favorito',
+                  hintText:
+                      _nomePetshopSelecionado ??
+                      'Digite o código ou toque para buscar',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.search),
+                    onPressed: () {
+                      final codigo = _codigoPetshopController.text.trim();
+
+                      if (_nomePetshopSelecionado != null || codigo.isEmpty) {
+                        // ✅ JÁ TEM NOME SELECIONADO OU CAMPO VAZIO → ABRE LISTA
+                        _abrirListaPetshops();
+                      } else {
+                        // ✅ TEM CÓDIGO DIGITADO E SEM NOME → BUSCA DIRETO
+                        _buscarPetshopPorCodigo(codigo);
+                      }
+                    },
+                  ),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 14,
+                  ),
                 ),
-                child: _arquivoFoto != null
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.file(_arquivoFoto!, fit: BoxFit.cover),
+                child: _nomePetshopSelecionado != null
+                    ? Text(
+                        '${_codigoPetshopController.text} — $_nomePetshopSelecionado',
+                        style: const TextStyle(fontWeight: FontWeight.w500),
                       )
-                    : (_urlFoto != null && _urlFoto!.isNotEmpty)
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          _urlFoto!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, erro, stackTrace) {
-                            debugPrint('❌ ERRO AO CARREGAR FOTO: $erro');
-                            return const Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.broken_image,
-                                  size: 48,
-                                  color: Colors.grey,
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  'Foto indisponível',
-                                  style: TextStyle(color: Colors.grey),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                      )
-                    : const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.add_a_photo, size: 48, color: Colors.grey),
-                          SizedBox(height: 8),
-                          Text(
-                            'Toque para adicionar foto',
-                            style: TextStyle(color: Colors.grey),
+                    : SizedBox(
+                        width: 60,
+                        child: TextField(
+                          controller: _codigoPetshopController,
+                          decoration: const InputDecoration(
+                            hintText: '000',
+                            border: InputBorder.none,
+                            counterText: '',
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
                           ),
-                        ],
+                          keyboardType: TextInputType.number,
+                          maxLength: 3,
+                          style: const TextStyle(fontSize: 14),
+                        ),
                       ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
+            // ======================================
             // 📝 OBSERVAÇÕES
+            // ======================================
             TextField(
               controller: _observacoesController,
               decoration: const InputDecoration(
@@ -735,26 +978,24 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
               ),
               maxLines: 3,
               textCapitalization: TextCapitalization.characters,
-              inputFormatters: [
-                UpperCaseTextFormatter(), // ✅ JÁ ESTÁ PRONTA! Reutiliza a mesma classe!
-              ],
+              inputFormatters: [UpperCaseTextFormatter()],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
 
+            // ======================================
             // 💾 BOTÃO SALVAR
-            Padding(
-              padding: const EdgeInsets.only(bottom: 32.0),
-              child: ElevatedButton(
-                onPressed: _carregando ? null : _salvar,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF512DA8),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: _carregando
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('SALVAR PET', style: TextStyle(fontSize: 16)),
+            // ======================================
+            ElevatedButton(
+              onPressed: _carregando ? null : _salvar,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF512DA8),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                minimumSize: const Size(double.infinity, 60),
               ),
+              child: _carregando
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text('SALVAR PET', style: TextStyle(fontSize: 16)),
             ),
           ],
         ),
@@ -762,8 +1003,6 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
     );
   }
 }
-
-// ✅ ===== COLOQUE A CLASSE ABAIXO, NO FIM DO ARQUIVO, FORA DE TUDO! =====
 
 class UpperCaseTextFormatter extends TextInputFormatter {
   @override

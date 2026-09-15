@@ -7,7 +7,14 @@ import 'produtos/tela_lancamento.dart';
 class TelaProdutos extends StatefulWidget {
   final String nomePet;
   final dynamic idPet;
-  const TelaProdutos({super.key, required this.nomePet, required this.idPet});
+  final dynamic idPetshop;
+
+  const TelaProdutos({
+    super.key,
+    required this.nomePet,
+    required this.idPet,
+    this.idPetshop,
+  });
 
   @override
   State<TelaProdutos> createState() => _TelaProdutosState();
@@ -61,23 +68,59 @@ class _TelaProdutosState extends State<TelaProdutos> {
 
   // ✅ CARREGAR HISTÓRICO
   Future<void> _carregarLancamentos() async {
+    // ✅ LIMPA A LISTA ANTES DE CARREGAR NOVO
     if (mounted) {
-      setState(() => _carregandoLancamentos = true);
+      setState(() {
+        _listaLancamentos = [];
+        _carregandoLancamentos = true;
+      });
     }
     try {
-      final resposta = await http.get(
+      // 📋 PRIMEIRO: carrega todos os produtos
+      final respProdutos = await http.get(Uri.parse('$apiBase/produtos'));
+      List<dynamic> listaProdutos = [];
+      if (respProdutos.statusCode == 200) {
+        listaProdutos = json.decode(respProdutos.body);
+      }
+
+      // 📋 SEGUNDO: carrega os lançamentos do pet
+      final respLanc = await http.get(
         Uri.parse('$apiBase/lancamentos/pet/${widget.idPet}'),
       );
-      if (resposta.statusCode == 200) {
+      if (respLanc.statusCode != 200) {
+        throw Exception('Não foi possível carregar lançamentos');
+      }
+      List<dynamic> todosLanc = json.decode(respLanc.body);
+
+      // ✅ FILTRA NA ORDEM CERTA:
+      // lancamento.idProduto → busca em produtos.id → pega produtos.idProduto = categoria
+      if (mounted) {
         setState(() {
-          _listaLancamentos = json.decode(resposta.body);
+          _listaLancamentos = todosLanc.where((lanc) {
+            final idDoProduto = lanc['idProduto'];
+
+            // Acha o produto pelo campo "id"
+            final produto = listaProdutos.firstWhere(
+              (p) => p['id'] == idDoProduto,
+              orElse: () => null,
+            );
+
+            if (produto == null) return false;
+
+            // produtos.idProduto = número da categoria → compara com aba selecionada
+            return produto['idProduto'] == _idCategoria;
+          }).toList();
+
           _carregandoLancamentos = false;
         });
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _carregandoLancamentos = false);
-        debugPrint('❌ Erro ao carregar: $e');
+        setState(() {
+          _listaLancamentos = [];
+          _carregandoLancamentos = false;
+        });
+        debugPrint('❌ Erro: $e');
       }
     }
   }
@@ -151,6 +194,7 @@ class _TelaProdutosState extends State<TelaProdutos> {
   @override
   void initState() {
     super.initState();
+    print('🔍 idPetshop recebido: ${widget.idPetshop}');
     _carregarLancamentos();
   }
 
@@ -160,15 +204,23 @@ class _TelaProdutosState extends State<TelaProdutos> {
         _indiceSelecionado = indice;
         _categoriaSelecionada = _nomeCategoria;
       });
+      _carregarLancamentos();
     }
   }
 
   // ✅ FLUXO: BUSCA → ESCOLHE → ABRE TELA NOVA
   Future<void> _adicionar() async {
+    // ✅ GARANTE QUE O VALOR ESTÁ CERTO ANTES DE ENVIAR
+    final categoriaParaEnviar = _idCategoria;
+
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => TelaLancamento(idPet: widget.idPet),
+        builder: (context) => TelaLancamento(
+          idPet: widget.idPet,
+          idCategoria: categoriaParaEnviar, // ✅ ENVIA VALOR GARANTIDO
+          idPetshop: widget.idPetshop,
+        ),
       ),
     );
     _carregarLancamentos();
@@ -378,6 +430,8 @@ class _TelaProdutosState extends State<TelaProdutos> {
                                   builder: (context) => TelaLancamento(
                                     idPet: widget.idPet,
                                     lancamento: lanc,
+                                    idCategoria: _idCategoria, // ✅ LINHA NOVA!
+                                    idPetshop: widget.idPetshop,
                                   ),
                                 ),
                               ).then((_) => _carregarLancamentos());
@@ -392,6 +446,9 @@ class _TelaProdutosState extends State<TelaProdutos> {
                                         idPet: widget.idPet,
                                         idLancamentoRepetido: lanc['id'],
                                         lancamento: lanc,
+                                        idCategoria:
+                                            _idCategoria, // ✅ LINHA NOVA!
+                                        idPetshop: widget.idPetshop,
                                       ),
                                     ),
                                   ).then((_) => _carregarLancamentos());
