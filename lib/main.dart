@@ -1,95 +1,103 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'utils/constantes.dart'; // ✅ SUAS CONSTANTES
+import 'utils/constantes.dart';
 import 'telas/tela_login.dart';
 import 'telas/tela_cadastro.dart';
 import 'telas/tela_recuperar_senha.dart';
 
-// ✅ INICIALIZA FIREBASE E CONFIGURA NOTIFICAÇÕES
+final FlutterLocalNotificationsPlugin _notificacoes =
+    FlutterLocalNotificationsPlugin();
+
+@pragma('vm:entry-point')
+Future<void> _aoReceberEmSegundoPlano(RemoteMessage mensagem) async {
+  await Firebase.initializeApp();
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // ✅ INICIA O FIREBASE
   await Firebase.initializeApp();
 
-  // ✅ CONFIGURA NOTIFICAÇÕES E PEGA TOKEN
-  await _configurarNotificacoes();
+  await _inicializarNotificacoesVisuais();
 
-  // ✅ RECEBE NOTIFICAÇÃO MESMO COM O APP ABERTO — SEM PACOTE EXTRA!
-  // ✅ NOTIFICAÇÃO COM APP ABERTO — APARECE NO TERMINAL
-  FirebaseMessaging.onMessage.listen((RemoteMessage mensagem) {
-    RemoteNotification? notificacao = mensagem.notification;
+  FirebaseMessaging.onBackgroundMessage(_aoReceberEmSegundoPlano);
 
+  FirebaseMessaging.onMessage.listen((RemoteMessage mensagem) async {
+    final notificacao = mensagem.notification;
     if (notificacao != null) {
-      final String titulo = notificacao.title ?? "Notificação";
-      final String corpo = notificacao.body ?? "";
-
-      // ✅ Aparece no terminal do VS Code — CONFIRMA QUE CHEGOU!
-      debugPrint("🔔 [APP ABERTO] $titulo: $corpo");
+      await _mostrarNotificacaoNaTela(
+        notificacao.title ?? "Notificação",
+        notificacao.body ?? "",
+      );
     }
   });
 
-  // ✅ NOTIFICAÇÃO AO ABRIR APP FECHADO
   FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage mensagem) {
-    debugPrint("🔔 [APP ABERTO POR NOTIFICAÇÃO]");
-    // Aqui você pode navegar para uma tela quando tocar na notificação
+    debugPrint("🔔 Toque na notificação");
   });
 
+  await _configurarNotificacoes();
   runApp(const MeuApp());
 }
 
-// ✅ PEGA TOKEN E ENVIA PARA API
-Future<void> _configurarNotificacoes() async {
-  FirebaseMessaging messaging = FirebaseMessaging.instance;
+Future<void> _inicializarNotificacoesVisuais() async {
+  const configAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const configIOS = DarwinInitializationSettings();
+  const config = InitializationSettings(android: configAndroid, iOS: configIOS);
+  await _notificacoes.initialize(config);
+}
 
-  // ✅ Pede permissão de notificação
-  NotificationSettings permissao = await messaging.requestPermission(
+Future<void> _mostrarNotificacaoNaTela(String titulo, String mensagem) async {
+  const detalhesAndroid = AndroidNotificationDetails(
+    'lembretes',
+    'Lembretes',
+    channelDescription: 'Notificações de lembretes',
+    importance: Importance.high,
+    priority: Priority.high,
+  );
+  const detalhes = NotificationDetails(android: detalhesAndroid);
+  await _notificacoes.show(0, titulo, mensagem, detalhes);
+}
+
+Future<void> _configurarNotificacoes() async {
+  final messaging = FirebaseMessaging.instance;
+
+  final permissao = await messaging.requestPermission(
     alert: true,
     badge: true,
     sound: true,
   );
 
   if (permissao.authorizationStatus == AuthorizationStatus.authorized) {
-    debugPrint('✅ Permissão de notificação concedida!');
+    debugPrint('✅ Permissão concedida!');
+    final token = await messaging.getToken();
+    debugPrint('📱 Token: $token');
 
-    // ✅ PEGA O TOKEN
-    String? token = await messaging.getToken();
-    debugPrint('📱 TOKEN DO CELULAR: $token');
-
-    // ✅ SE TIVER TOKEN, ENVIA PARA API
-    if (token != null) {
-      // ⚠️ O idTutor VAI VIR DA TELA DE LOGIN — por enquanto deixamos para depois
-      // _enviarTokenParaApi(token, idTutor);
-    }
-
-    // ✅ ATUALIZA TOKEN SE MUDAR
     messaging.onTokenRefresh.listen((novoToken) {
       debugPrint('🔄 Token atualizado: $novoToken');
     });
   } else {
-    debugPrint('❌ Permissão de notificação NEGADA!');
+    debugPrint('❌ Permissão negada!');
   }
 }
 
-// ✅ ENVIA TOKEN PARA A API (usaremos depois do login)
 Future<void> _enviarTokenParaApi(String token, dynamic idTutor) async {
   try {
     final resposta = await http.post(
-      Uri.parse('$apiBase/tutores/$idTutor/token'),
+      Uri.parse('$apiBase/$idTutor/token'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode(token),
     );
-
     debugPrint(
       resposta.statusCode == 200
-          ? '✅ Token salvo na API!'
-          : '❌ Erro ao salvar token: ${resposta.statusCode}',
+          ? '✅ Token salvo!'
+          : '⚠️ Erro: ${resposta.statusCode}',
     );
   } catch (e) {
-    debugPrint('❌ Erro de conexão: $e');
+    debugPrint('❌ Erro: $e');
   }
 }
 

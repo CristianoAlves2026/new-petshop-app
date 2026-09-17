@@ -320,17 +320,16 @@ class _TelaProdutosState extends State<TelaProdutos> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ✅ TÍTULO + 3 BOTÕES DE FILTRO
+            // ✅ TÍTULO E FILTROS — FICAM EM CIMA
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '📋 $_textoFiltro', // ✅ TEXTO MUDA CONFORME FILTRO
+                  '📋 $_textoFiltro',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 Row(
                   children: [
-                    // ✅ NO PRAZO → VERDE
                     IconButton(
                       onPressed: () {
                         if (mounted) {
@@ -348,8 +347,6 @@ class _TelaProdutosState extends State<TelaProdutos> {
                       color: _filtro == 'noprazo' ? Colors.green : Colors.grey,
                       tooltip: 'No prazo',
                     ),
-
-                    // ❌ VENCIDAS → VERMELHO
                     IconButton(
                       onPressed: () {
                         if (mounted) {
@@ -367,8 +364,6 @@ class _TelaProdutosState extends State<TelaProdutos> {
                       color: _filtro == 'vencidos' ? Colors.red : Colors.grey,
                       tooltip: 'Vencidas',
                     ),
-
-                    // 💜 FINALIZADAS → AZUL
                     IconButton(
                       onPressed: () {
                         if (mounted) {
@@ -393,6 +388,8 @@ class _TelaProdutosState extends State<TelaProdutos> {
               ],
             ),
             const SizedBox(height: 8),
+
+            // ✅ AQUI ESTÁ O SEGREDO → Expanded envolve SOMENTE a lista!
             Expanded(
               child: _carregandoLancamentos
                   ? const Center(child: CircularProgressIndicator())
@@ -419,9 +416,9 @@ class _TelaProdutosState extends State<TelaProdutos> {
                               ),
                             ),
                             subtitle: Text(
-                              'Data: ${_formatarData(lanc['data'])} • Repetir em: ${_formatarData(lanc['repetir'])}'
-                              '${_textoStatus(lanc)}',
-                              style: const TextStyle(fontSize: 13),
+                              'Data: ${_formatarData(lanc['data'])}\n'
+                              'Vence: ${_formatarData(lanc['repetir'])}${_textoStatus(lanc)}',
+                              style: const TextStyle(fontSize: 13, height: 1.5),
                             ),
                             onTap: () {
                               Navigator.push(
@@ -430,7 +427,7 @@ class _TelaProdutosState extends State<TelaProdutos> {
                                   builder: (context) => TelaLancamento(
                                     idPet: widget.idPet,
                                     lancamento: lanc,
-                                    idCategoria: _idCategoria, // ✅ LINHA NOVA!
+                                    idCategoria: _idCategoria,
                                     idPetshop: widget.idPetshop,
                                   ),
                                 ),
@@ -446,8 +443,7 @@ class _TelaProdutosState extends State<TelaProdutos> {
                                         idPet: widget.idPet,
                                         idLancamentoRepetido: lanc['id'],
                                         lancamento: lanc,
-                                        idCategoria:
-                                            _idCategoria, // ✅ LINHA NOVA!
+                                        idCategoria: _idCategoria,
                                         idPetshop: widget.idPetshop,
                                       ),
                                     ),
@@ -473,7 +469,6 @@ class _TelaProdutosState extends State<TelaProdutos> {
                                 final bool estaVencido =
                                     dataRepetir != null &&
                                     dataRepetir.isBefore(hoje);
-
                                 return [
                                   PopupMenuItem(
                                     value: processado ? null : 'repetir',
@@ -533,9 +528,11 @@ class _TelaProdutosState extends State<TelaProdutos> {
                         );
                       },
                     ),
-            ),
+            ), // ✅ FIM DO Expanded — A LISTA ACABA AQUI
+            // ==============================================
+            // ✅ BOTÃO ESTÁ FORA DO Expanded → FICA EMBAIXO!
+            // ==============================================
             const SizedBox(height: 16),
-            // ✅ BOTÃO "+"
             Center(
               child: ElevatedButton(
                 onPressed: _carregando ? null : _adicionar,
@@ -569,14 +566,26 @@ class _TelaProdutosState extends State<TelaProdutos> {
         selectedItemColor: Colors.white,
         unselectedItemColor: Colors.white70,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.vaccines), label: 'Vacinas'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.restaurant),
+            icon: Icon(Icons.vaccines),
+            label: 'Vacinas',
+          ), // ✅ Já está certo
+          BottomNavigationBarItem(
+            icon: Icon(Icons.pets_outlined),
             label: 'Alimentação',
-          ),
-          BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'Saúde'),
-          BottomNavigationBarItem(icon: Icon(Icons.soap), label: 'Higiene'),
-          BottomNavigationBarItem(icon: Icon(Icons.category), label: 'Outros'),
+          ), // ✅ OSSO 🦴
+          BottomNavigationBarItem(
+            icon: Icon(Icons.favorite),
+            label: 'Saúde',
+          ), // ✅ Já está certo
+          BottomNavigationBarItem(
+            icon: Icon(Icons.bathtub),
+            label: 'Higiene',
+          ), // ✅ BANHEIRA 🛁
+          BottomNavigationBarItem(
+            icon: Icon(Icons.category),
+            label: 'Outros',
+          ), // ✅ Já está certo
         ],
       ),
     );

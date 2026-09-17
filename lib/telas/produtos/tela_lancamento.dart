@@ -771,65 +771,100 @@ class _TelaLancamentoState extends State<TelaLancamento> {
               const SizedBox(height: 20),
 
               // ✅ CAMPO PETSHOP — MESMO FORMATO DA TELA DO PET
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF3E5F5),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Text(
-                      'PetShop: ',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Cores.roxoEscuro,
+              // ✅ CAMPO PETSHOP FAVORITO — LUPA INTELIGENTE
+              _nomePetshopSelecionado != null
+                  ? InputDecorator(
+                      decoration: InputDecoration(
+                        labelText: 'PetShop Favorito',
+                        border: const OutlineInputBorder(),
+                        enabledBorder: const OutlineInputBorder(
+                          borderSide: BorderSide(
+                            color: Color(0xFFBDBDBD),
+                            width: 1.0,
+                          ),
+                        ),
+                        focusedBorder: const OutlineInputBorder(
+                          borderSide: BorderSide(
+                            color: Cores.roxoEscuro,
+                            width: 2.0,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        suffixIcon: IconButton(
+                          icon: const Icon(
+                            Icons.search,
+                            color: Cores.roxoEscuro,
+                          ),
+                          onPressed: _salvando ? null : _abrirListaPetshops,
+                          tooltip: 'Buscar PetShop',
+                        ),
                       ),
+                      child: Text(
+                        '${_idPetshopSelecionado ?? widget.idPetshop} — $_nomePetshopSelecionado',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    )
+                  : TextField(
+                      controller: _codigoPetshopController,
+                      decoration: InputDecoration(
+                        labelText: 'PetShop Favorito',
+                        hintText: 'Código',
+                        border: const OutlineInputBorder(),
+                        enabledBorder: const OutlineInputBorder(
+                          borderSide: BorderSide(
+                            color: Color(0xFFBDBDBD),
+                            width: 1.0,
+                          ),
+                        ),
+                        focusedBorder: const OutlineInputBorder(
+                          borderSide: BorderSide(
+                            color: Cores.roxoEscuro,
+                            width: 2.0,
+                          ),
+                        ),
+                        counterText: '',
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        suffixIcon: IconButton(
+                          icon: const Icon(
+                            Icons.search,
+                            color: Cores.roxoEscuro,
+                          ),
+                          onPressed: _salvando
+                              ? null
+                              : () {
+                                  // ✅ LÓGICA DA LUPA
+                                  final codigo = _codigoPetshopController.text
+                                      .trim();
+                                  if (codigo.isNotEmpty) {
+                                    // ✅ TEM CÓDIGO → BUSCA DIRETO, NÃO ABRE LISTA
+                                    _buscarPetshopPorCodigo(codigo);
+                                  } else {
+                                    // ✅ VAZIO → ABRE A LISTA
+                                    _abrirListaPetshops();
+                                  }
+                                },
+                          tooltip: 'Buscar PetShop',
+                        ),
+                      ),
+                      keyboardType: TextInputType.number,
+                      maxLength: 3,
+                      style: const TextStyle(fontSize: 15),
+                      onChanged: (valor) {
+                        if (valor.trim().length == 3) {
+                          _buscarPetshopPorCodigo(valor.trim());
+                        }
+                      },
                     ),
-                    // ✅ CÓDIGO + NOME OU CAMPO PARA DIGITAR
-                    Expanded(
-                      child: _nomePetshopSelecionado != null
-                          ? Text(
-                              '${_idPetshopSelecionado ?? widget.idPetshop} — $_nomePetshopSelecionado',
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            )
-                          : TextField(
-                              controller: _codigoPetshopController,
-                              decoration: const InputDecoration(
-                                hintText: 'Código',
-                                border: InputBorder.none,
-                                counterText: '',
-                                isDense: true,
-                                contentPadding: EdgeInsets.symmetric(
-                                  vertical: 6,
-                                ),
-                              ),
-                              keyboardType: TextInputType.number,
-                              maxLength: 3,
-                              style: const TextStyle(fontSize: 15),
-                              onChanged: (valor) {
-                                if (valor.trim().length == 3) {
-                                  _buscarPetshopPorCodigo(valor.trim());
-                                }
-                              },
-                            ),
-                    ),
-                    // ✅ BOTÃO LUPA
-                    IconButton(
-                      icon: const Icon(Icons.search, color: Cores.roxoEscuro),
-                      onPressed: _salvando ? null : _abrirListaPetshops,
-                      tooltip: 'Buscar PetShop',
-                    ),
-                  ],
-                ),
-              ),
               const SizedBox(height: 20),
 
               // ✅ FOTO
@@ -999,9 +1034,9 @@ class _TelaLancamentoState extends State<TelaLancamento> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF3E5F5),
+                  color: Colors.white, // ✅ FUNDO BRANCO
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Cores.roxoEscuro.withOpacity(0.3)),
+                  border: Border.all(color: Cores.roxoEscuro),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,

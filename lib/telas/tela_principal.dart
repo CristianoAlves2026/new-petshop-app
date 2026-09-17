@@ -8,13 +8,11 @@ import 'dart:convert';
 class TelaPrincipal extends StatefulWidget {
   final dynamic idTutor;
   final String nomeTutor;
-
   const TelaPrincipal({
     super.key,
     required this.idTutor,
     required this.nomeTutor,
   });
-
   @override
   State<TelaPrincipal> createState() => _TelaPrincipalState();
 }
@@ -89,37 +87,10 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SizedBox(
-                  height: 60,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.add, size: 28),
-                    label: const Text(
-                      'Novo Pet',
-                      style: TextStyle(fontSize: 18),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Cores.roxoEscuro,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              TelaCadastroPet(idTutor: widget.idTutor),
-                        ),
-                      ).then((resultado) {
-                        if (resultado == true) {
-                          _carregarPets();
-                        }
-                      });
-                    },
-                  ),
-                ),
-                const SizedBox(height: 30),
+                // ✅ TÍTULO / ESPAÇO — NÃO TEM BOTÃO AQUI MAIS!
+                const SizedBox(height: 8),
+
+                // ✅ AQUI ESTÁ O SEGREDO → Expanded envolve SOMENTE a lista!
                 Expanded(
                   child: _carregando
                       ? const Center(child: CircularProgressIndicator())
@@ -133,21 +104,16 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                             ),
                           ),
                         )
-                      // ✅ TROQUE ESTA LINHA:
-                      // : ListView.builder(
-                      // ✅ POR ESTA:
                       : GridView.count(
-                          crossAxisCount: 2, // ✅ 2 por linha
-                          crossAxisSpacing: 16, // ✅ espaçamento entre colunas
-                          mainAxisSpacing: 16, // ✅ espaçamento entre linhas
-                          childAspectRatio:
-                              0.90, // ✅ formato quadrado/retangular
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                          childAspectRatio: 0.90,
                           padding: EdgeInsets.zero,
                           children: List.generate(_listaPets.length, (i) {
                             final pet = _listaPets[i];
                             print('🔍 DADOS COMPLETOS DO PET: $pet');
 
-                            // ✅ ==== TODO O SEU CÓDIGO (nome, raça, idade, foto) CONTINUA IGUAL AQUI ====
                             final nomePet = pet['nome'] ?? 'Sem nome';
                             String nomeRaca = 'Raça não informada';
                             final idRacaPet = pet['idRaca'];
@@ -161,6 +127,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                                     encontrada['nome']?.toString() ?? nomeRaca;
                               }
                             }
+
                             String textoSexo = pet['sexo']?.toString() ?? '';
                             String textoIdade = '';
                             if (pet['nascimento'] != null &&
@@ -204,10 +171,9 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                                 textoIdade = '';
                               }
                             }
+
                             final foto = pet['foto']?.toString().trim();
 
-                            // ✅ ==== CARD QUADRADO COM CLIQUES SEPARADOS ====
-                            // ✅ ==== CARD COM PONTINHOS ABAIXO DA FOTO ====
                             return Card(
                               elevation: 4,
                               shape: RoundedRectangleBorder(
@@ -230,8 +196,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                                             pet['nome']?.toString() ??
                                             'Sem nome',
                                         idPet: pet['id'],
-                                        idPetshop:
-                                            pet['idPetshop'], // ✅ COM UNDERLINE!
+                                        idPetshop: pet['idPetshop'],
                                       ),
                                     ),
                                   );
@@ -241,7 +206,6 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      // ✅ 🖼️ FOTO
                                       CircleAvatar(
                                         radius: 36,
                                         backgroundColor: Cores.roxoClaro,
@@ -270,7 +234,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                                                 size: 36,
                                               ),
                                       ),
-                                      // ✅ ⋯ PONTINHOS ABAIXO DA FOTO → CLICA E EDITA
+                                      const SizedBox(height: 4),
                                       InkWell(
                                         onTap: () {
                                           Navigator.push(
@@ -290,10 +254,10 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                                         },
                                         child: Padding(
                                           padding: const EdgeInsets.symmetric(
-                                            vertical: 4,
+                                            vertical: 2,
                                           ),
                                           child: Text(
-                                            '⋯', // ✅ 3 pontinhos
+                                            '⋯',
                                             style: TextStyle(
                                               fontSize: 22,
                                               fontWeight: FontWeight.bold,
@@ -303,8 +267,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                                           ),
                                         ),
                                       ),
-
-                                      // ✅ 📝 NOME + DADOS
+                                      const SizedBox(height: 4),
                                       Text(
                                         nomePet,
                                         style: const TextStyle(
@@ -329,12 +292,16 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                             );
                           }),
                         ),
-                ),
+                ), // ✅ FIM DO Expanded — A LISTA ACABA AQUI
+
+                // ==============================================
+                // ✅ BOTÃO "NOVO PET" — FORA DO Expanded → EMBAIXO!
+                // ==============================================
               ],
             ),
           ),
 
-          // ✅ MENU LATERAL — IGUALZINHO!
+          // ✅ MENU LATERAL
           if (menuAberto)
             Positioned(
               top: 0,
@@ -366,6 +333,26 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
             ),
         ],
       ),
+      // ✅ ==== BOTÃO FLUTUANTE ====
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Cores.roxoEscuro,
+        foregroundColor: Colors.white,
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => TelaCadastroPet(idTutor: widget.idTutor),
+            ),
+          ).then((resultado) {
+            if (resultado == true) {
+              _carregarPets();
+            }
+          });
+        },
+        child: const Icon(Icons.add, size: 28),
+      ),
+
+      // ✅ ==== FIM DO BOTÃO FLUTUANTE ====
     );
   }
 }
