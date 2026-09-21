@@ -54,6 +54,7 @@ class _TelaLancamentoState extends State<TelaLancamento> {
   dynamic _idPetshopSelecionado;
   String? _nomePetshopSelecionado;
   final _codigoPetshopController = TextEditingController();
+  bool _carregando = false; // ✅ ADICIONE ESTA LINHA
 
   File? _foto;
   dynamic _idLancamento;
@@ -76,51 +77,21 @@ class _TelaLancamentoState extends State<TelaLancamento> {
       );
     }
 
-    // ✅ ==============================================
-    // ✅ REPETIR LANÇAMENTO
-    // ✅ ==============================================
-    if (widget.idLancamentoRepetido != null && widget.lancamento != null) {
-      final lanc = widget.lancamento;
-      _idLancamento = null;
-      _idProduto = lanc['idProduto'];
-      _nomeProduto = lanc['descricao']?.toString();
-      _observacoesController.text = lanc['observacao']?.toString() ?? '';
-      _urlFoto = lanc['foto']?.toString();
-      final hoje = DateTime.now();
-      _dataController.text =
-          '${hoje.day.toString().padLeft(2, '0')}/${hoje.month.toString().padLeft(2, '0')}/${hoje.year}';
-      _proximaDoseController.text = '';
+    // ✅ ==================================================
+    // ✅ REPETIR / EDIÇÃO — vem da lista OU da notificação
+    // ✅ ==================================================
+    if (widget.idLancamentoRepetido != null) {
+      if (widget.lancamento != null) {
+        // ✅ Veio da lista → dados já prontos
+        _carregarDadosDiretos(widget.lancamento, repetir: true);
+      } else {
+        // ✅ Veio da NOTIFICAÇÃO → busca da API
+        _carregarLancamentoPorId(widget.idLancamentoRepetido);
+      }
     }
-    // ✅ ==============================================
-    // ✅ EDIÇÃO DE LANÇAMENTO
-    // ✅ ==============================================
+    // ✅ EDIÇÃO NORMAL — veio da lista
     else if (widget.lancamento != null) {
-      final lanc = widget.lancamento;
-      _idLancamento = lanc['id'];
-      _idProduto = lanc['idProduto'];
-      _nomeProduto = lanc['descricao']?.toString();
-      _urlFoto = lanc['foto']?.toString();
-      try {
-        final dataTexto = lanc['data']?.toString() ?? '';
-        if (dataTexto.isNotEmpty) {
-          final data = DateTime.parse(dataTexto);
-          _dataController.text =
-              '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
-        }
-      } catch (e) {
-        debugPrint('❌ Erro ao carregar data: $e');
-      }
-      try {
-        final repetirTexto = lanc['repetir']?.toString() ?? '';
-        if (repetirTexto.isNotEmpty) {
-          final repetir = DateTime.parse(repetirTexto);
-          _proximaDoseController.text =
-              '${repetir.day.toString().padLeft(2, '0')}/${repetir.month.toString().padLeft(2, '0')}/${repetir.year}';
-        }
-      } catch (e) {
-        debugPrint('❌ Erro ao carregar repetir: $e');
-      }
-      _observacoesController.text = lanc['observacao']?.toString() ?? '';
+      _carregarDadosDiretos(widget.lancamento, repetir: false);
     }
     // ✅ ==============================================
     // ✅ NOVO LANÇAMENTO
@@ -1192,5 +1163,80 @@ class _TelaLancamentoState extends State<TelaLancamento> {
         ),
       ),
     );
+  }
+
+  // ✅ Carrega quando os dados já vieram prontos
+  void _carregarDadosDiretos(dynamic lanc, {required bool repetir}) {
+    _idLancamento = repetir ? null : lanc['id'];
+    _idProduto = lanc['idProduto'];
+    _nomeProduto = lanc['descricao']?.toString();
+    _observacoesController.text = lanc['observacao']?.toString() ?? '';
+    _urlFoto = lanc['foto']?.toString();
+
+    if (repetir) {
+      final hoje = DateTime.now();
+      _dataController.text =
+          '${hoje.day.toString().padLeft(2, '0')}/${hoje.month.toString().padLeft(2, '0')}/${hoje.year}';
+      _proximaDoseController.text = '';
+    } else {
+      try {
+        final dataTexto = lanc['data']?.toString() ?? '';
+        if (dataTexto.isNotEmpty) {
+          final data = DateTime.parse(dataTexto);
+          _dataController.text =
+              '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
+        }
+        final repetirTexto = lanc['repetir']?.toString() ?? '';
+        if (repetirTexto.isNotEmpty) {
+          final dataRepetir = DateTime.parse(repetirTexto);
+          _proximaDoseController.text =
+              '${dataRepetir.day.toString().padLeft(2, '0')}/${dataRepetir.month.toString().padLeft(2, '0')}/${dataRepetir.year}';
+        }
+      } catch (e) {
+        debugPrint('❌ Erro ao carregar datas: $e');
+      }
+    }
+    setState(() {});
+  }
+
+  // ✅ Busca da API — quando vem da NOTIFICAÇÃO
+  Future<void> _carregarLancamentoPorId(dynamic id) async {
+    setState(() => _carregando = true);
+    try {
+      final resposta = await http.get(Uri.parse('$apiBase/lancamentos/$id'));
+      if (!mounted) return;
+
+      if (resposta.statusCode == 200) {
+        final lanc = json.decode(resposta.body);
+        _idLancamento = lanc['id'];
+        _idProduto = lanc['idProduto'];
+        _nomeProduto =
+            lanc['produto']?['descricao']?.toString() ?? 'Lançamento';
+        _observacoesController.text = lanc['observacao']?.toString() ?? '';
+        _urlFoto = lanc['foto']?.toString();
+
+        try {
+          final dataTexto = lanc['data']?.toString() ?? '';
+          if (dataTexto.isNotEmpty) {
+            final data = DateTime.parse(dataTexto);
+            _dataController.text =
+                '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
+          }
+          final repetirTexto = lanc['repetir']?.toString() ?? '';
+          if (repetirTexto.isNotEmpty) {
+            final dataRepetir = DateTime.parse(repetirTexto);
+            _proximaDoseController.text =
+                '${dataRepetir.day.toString().padLeft(2, '0')}/${dataRepetir.month.toString().padLeft(2, '0')}/${dataRepetir.year}';
+          }
+        } catch (e) {
+          debugPrint('❌ Erro ao carregar datas: $e');
+        }
+        setState(() => _carregando = false);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _carregando = false);
+      debugPrint('❌ Erro ao buscar lançamento: $e');
+    }
   }
 }

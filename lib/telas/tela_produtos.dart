@@ -29,7 +29,8 @@ class _TelaProdutosState extends State<TelaProdutos> {
   bool _carregando = false;
   bool _carregandoLancamentos = true;
   String _categoriaSelecionada = 'Vacinas';
-  String _textoFiltro = 'Histórico'; // ✅ Começa como "Histórico"
+  String _textoFiltro = 'Histórico';
+  String _nomePetExibicao = '';
 
   // ✅ 1 = Vacinas | 2 = Alimentação | 3 = Saúde | 4 = Higiene | 5 = Outros
   int get _idCategoria {
@@ -194,7 +195,21 @@ class _TelaProdutosState extends State<TelaProdutos> {
   @override
   void initState() {
     super.initState();
-    print('🔍 idPetshop recebido: ${widget.idPetshop}');
+
+    print('🔍 nomePet recebido: "${widget.nomePet}"');
+    print('🔍 idPet recebido: ${widget.idPet}');
+
+    // ✅ Se veio o nome → usa direto
+    if (widget.nomePet.isNotEmpty) {
+      _nomePetExibicao = widget.nomePet;
+      print('🔍 Usou nome direto: $_nomePetExibicao');
+    }
+    // ✅ Se veio vazio (veio da notificação) → BUSCA da API
+    else {
+      print('🔍 Vai buscar nome na API...');
+      _buscarNomePet();
+    }
+
     _carregarLancamentos();
   }
 
@@ -303,7 +318,7 @@ class _TelaProdutosState extends State<TelaProdutos> {
               ),
             ),
             Text(
-              widget.nomePet, // ✅ NOME DO PET EM DESTAQUE
+              _nomePetExibicao, // ✅ NOME DO PET EM DESTAQUE
               style: const TextStyle(
                 fontSize: 22, // ✅ MAIOR
                 fontWeight: FontWeight.bold, // ✅ NEGRITO
@@ -589,5 +604,31 @@ class _TelaProdutosState extends State<TelaProdutos> {
         ],
       ),
     );
+  }
+
+  Future<void> _buscarNomePet() async {
+    print('🔍 Buscando pet ID: ${widget.idPet}');
+    try {
+      final resposta = await http.get(
+        Uri.parse('$apiBase/pets/${widget.idPet}'),
+      );
+      print('🔍 Status API: ${resposta.statusCode}');
+
+      if (!mounted) return;
+      if (resposta.statusCode == 200) {
+        final dados = json.decode(resposta.body);
+        print('🔍 Dados do pet: $dados');
+        setState(() {
+          _nomePetExibicao = dados['nome'] ?? 'Pet';
+          print('🔍 Nome definido: $_nomePetExibicao');
+        });
+      }
+    } catch (e) {
+      print('❌ Erro: $e');
+      if (!mounted) return;
+      setState(() {
+        _nomePetExibicao = 'Pet';
+      });
+    }
   }
 }

@@ -112,7 +112,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                           padding: EdgeInsets.zero,
                           children: List.generate(_listaPets.length, (i) {
                             final pet = _listaPets[i];
-                            print('🔍 DADOS COMPLETOS DO PET: $pet');
+                            //print('🔍 DADOS COMPLETOS DO PET: $pet');
 
                             final nomePet = pet['nome'] ?? 'Sem nome';
                             String nomeRaca = 'Raça não informada';
@@ -293,7 +293,6 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                           }),
                         ),
                 ), // ✅ FIM DO Expanded — A LISTA ACABA AQUI
-
                 // ==============================================
                 // ✅ BOTÃO "NOVO PET" — FORA DO Expanded → EMBAIXO!
                 // ==============================================
