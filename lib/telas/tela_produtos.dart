@@ -8,12 +8,14 @@ class TelaProdutos extends StatefulWidget {
   final String nomePet;
   final dynamic idPet;
   final dynamic idPetshop;
+  final String? categoria;
 
   const TelaProdutos({
     super.key,
     required this.nomePet,
     required this.idPet,
     this.idPetshop,
+    this.categoria,
   });
 
   @override
@@ -195,21 +197,45 @@ class _TelaProdutosState extends State<TelaProdutos> {
   @override
   void initState() {
     super.initState();
-
     print('🔍 nomePet recebido: "${widget.nomePet}"');
     print('🔍 idPet recebido: ${widget.idPet}');
 
-    // ✅ Se veio o nome → usa direto
+    // ✅ NOVA PARTE: Define aba correta pela categoria
+    // ✅ Define a aba certa conforme a categoria recebida
+    if (widget.categoria != null) {
+      switch (widget.categoria) {
+        case 'vacinas':
+          _categoriaSelecionada = 'Vacinas';
+          _indiceSelecionado = 0;
+          break;
+        case 'alimentacao':
+          _categoriaSelecionada = 'Alimentação';
+          _indiceSelecionado = 1;
+          break;
+        case 'saude':
+          _categoriaSelecionada = 'Saúde';
+          _indiceSelecionado = 2;
+          break;
+        case 'higiene':
+          _categoriaSelecionada = 'Higiene';
+          _indiceSelecionado = 3;
+          break;
+        case 'outros':
+        default:
+          _categoriaSelecionada = 'Outros';
+          _indiceSelecionado = 4;
+      }
+      print('🔍 Aba selecionada: $_categoriaSelecionada');
+    }
+
+    // ✅ RESTO CONTINUA IGUAL — NÃO MEXI NADA!
     if (widget.nomePet.isNotEmpty) {
       _nomePetExibicao = widget.nomePet;
       print('🔍 Usou nome direto: $_nomePetExibicao');
-    }
-    // ✅ Se veio vazio (veio da notificação) → BUSCA da API
-    else {
+    } else {
       print('🔍 Vai buscar nome na API...');
       _buscarNomePet();
     }
-
     _carregarLancamentos();
   }
 

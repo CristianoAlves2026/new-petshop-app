@@ -59,22 +59,26 @@ void main() async {
   runApp(const MeuApp());
 }
 
-// ✅ Abre a tela do lançamento correto
+// ✅ Abre a tela correta conforme a categoria
+// ✅ Abre a tela correta — VOLTA PARA INÍCIO primeiro, setinha continua aparecendo!
 void _abrirLancamentoDaNotificacao(Map<String, dynamic> dados) {
   final idLancamento = dados['idLancamento'];
   final idPet = dados['idPet'];
+  final categoria = dados['categoria'] ?? 'vacinas';
 
   if (idLancamento != null && idPet != null) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final contexto = navigatorKey.currentContext;
       if (contexto != null) {
+        // ✅ Remove todas as telas empilhadas → volta para a raiz
+        Navigator.popUntil(contexto, (rota) => rota.isFirst);
+
+        // ✅ Agora abre a tela nova → aparece a setinha de voltar para a raiz
         Navigator.push(
           contexto,
           MaterialPageRoute(
-            builder: (context) => TelaProdutos(
-              nomePet: "", // ✅ Vazio — a tela recarrega os dados
-              idPet: idPet,
-            ),
+            builder: (context) =>
+                TelaProdutos(nomePet: "", idPet: idPet, categoria: categoria),
           ),
         );
       }

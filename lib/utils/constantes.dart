@@ -14,7 +14,9 @@ class Cores {
   static const Color alerta = Color(0xFF607D8B); // 🩶 Cinza azulado
 
   // ⚪ FUNDO E TEXTO
-  static const Color fundo = Color(0xFFF5F5F5);
+  //static const Color fundo = Color(0xFFF5F5F5);
+  static const Color fundo = Color(0xFFFFFFFF);
+
   static const Color texto = Color(0xFF263238);
   static const Color textoClaro = Color(0xFF757575);
   static const Color branco = Color(0xFFFFFFFF);
@@ -31,7 +33,7 @@ const String cloudUploadPreset = "petshop_upload"; // ✅ ADICIONE ESTA LINHA
 
 // 🌐 URL DA API — NÃO ALTERAR!
 // emulador do Android Studio
-//const String apiBase = "http://10.0.2.2:10000/api/v1";
+const String apiBase = "http://10.0.2.2:10000/api/v1";
 
 //celular real
-const String apiBase = "https://petshop-api-rtra.onrender.com/api/v1";
+//const String apiBase = "https://petshop-api-rtra.onrender.com/api/v1";
