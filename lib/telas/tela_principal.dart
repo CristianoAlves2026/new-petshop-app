@@ -4,6 +4,8 @@ import 'tela_cadastro_pet.dart';
 import 'tela_produtos.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'tela_cadastro.dart';
+import 'tela_permissoes.dart';
 
 class TelaPrincipal extends StatefulWidget {
   final dynamic idTutor;
@@ -52,6 +54,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -112,7 +115,6 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                           padding: EdgeInsets.zero,
                           children: List.generate(_listaPets.length, (i) {
                             final pet = _listaPets[i];
-                            //print('🔍 DADOS COMPLETOS DO PET: $pet');
 
                             final nomePet = pet['nome'] ?? 'Sem nome';
                             String nomeRaca = 'Raça não informada';
@@ -301,6 +303,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
           ),
 
           // ✅ MENU LATERAL
+          // ✅ MENU LATERAL
           if (menuAberto)
             Positioned(
               top: 0,
@@ -317,12 +320,53 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                         color: Cores.roxoEscuro,
                       ),
                       title: const Text('Meus Dados'),
+                      onTap: () async {
+                        setState(() => menuAberto = false);
+                        final dados = await _buscarDadosTutor();
+                        if (mounted) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => TelaCadastro(
+                                dadosTutor: dados, // ✅ TODOS os dados agora!
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+
+                    ListTile(
+                      leading: const Icon(Icons.verified_user),
+                      title: const Text('Permissões'),
                       onTap: () {
-                        setState(() {
-                          menuAberto = false;
+                        // ✅ FECHA o menu E DEPOIS abre a tela
+                        setState(() => menuAberto = false);
+
+                        // ✅ Espera o menu fechar e SÓ DEPOIS navega
+                        Future.delayed(Duration.zero, () {
+                          if (mounted) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    TelaPermissoes(idTutor: widget.idTutor),
+                              ),
+                            );
+                          }
                         });
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(
+                        Icons.settings,
+                        color: Cores.roxoEscuro,
+                      ),
+                      title: const Text('Configurações'),
+                      onTap: () {
+                        setState(() => menuAberto = false);
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('📋 Em breve!')),
+                          const SnackBar(content: Text('⚙️ Em breve!')),
                         );
                       },
                     ),
@@ -353,5 +397,20 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
 
       // ✅ ==== FIM DO BOTÃO FLUTUANTE ====
     );
+  }
+
+  // ✅ BUSCA DADOS COMPLETOS DO TUTOR
+  Future<Map<String, dynamic>?> _buscarDadosTutor() async {
+    try {
+      final resposta = await http.get(
+        Uri.parse('$apiBase/tutores/${widget.idTutor}'),
+      );
+      if (resposta.statusCode == 200) {
+        return json.decode(resposta.body);
+      }
+    } catch (e) {
+      debugPrint('❌ Erro ao buscar dados: $e');
+    }
+    return null;
   }
 }

@@ -27,6 +27,8 @@ class TelaLancamento extends StatefulWidget {
   final dynamic idCategoria;
   final dynamic idPetshop;
   final dynamic nomePetshop;
+  final String? nomeProdutoSelecionado; // ✅ NOVO
+  final dynamic idProdutoSelecionado; // ✅ NOVO
 
   const TelaLancamento({
     super.key,
@@ -36,6 +38,8 @@ class TelaLancamento extends StatefulWidget {
     this.idCategoria = 1,
     this.idPetshop,
     this.nomePetshop,
+    this.nomeProdutoSelecionado, // ✅ NOVO
+    this.idProdutoSelecionado, // ✅ NOVO
   });
 
   @override
@@ -45,6 +49,7 @@ class TelaLancamento extends StatefulWidget {
 class _TelaLancamentoState extends State<TelaLancamento> {
   String? _nomeProduto;
   dynamic _idProduto;
+  dynamic _categoriaSelecionada;
   final _dataController = TextEditingController();
   final _observacoesController = TextEditingController();
   final _anosController = TextEditingController();
@@ -54,8 +59,7 @@ class _TelaLancamentoState extends State<TelaLancamento> {
   dynamic _idPetshopSelecionado;
   String? _nomePetshopSelecionado;
   final _codigoPetshopController = TextEditingController();
-  bool _carregando = false; // ✅ ADICIONE ESTA LINHA
-
+  bool _carregando = false;
   File? _foto;
   dynamic _idLancamento;
   String? _urlFoto;
@@ -66,7 +70,6 @@ class _TelaLancamentoState extends State<TelaLancamento> {
   @override
   void initState() {
     super.initState();
-
     _idPetshopSelecionado = widget.idPetshop;
     _codigoPetshopController.text = widget.idPetshop?.toString() ?? '';
 
@@ -96,42 +99,68 @@ class _TelaLancamentoState extends State<TelaLancamento> {
     // ✅ ==============================================
     // ✅ NOVO LANÇAMENTO
     // ✅ ==============================================
+    // ✅ ==============================================
+    // ✅ NOVO LANÇAMENTO
+    // ✅ ==============================================
     else {
       final hoje = DateTime.now();
       _dataController.text =
           '${hoje.day.toString().padLeft(2, '0')}/${hoje.month.toString().padLeft(2, '0')}/${hoje.year}';
+
+      // ✅ SE VEIO PRODUTO JÁ SELECIONADO → PREENCHE SOZINHO
+      if (widget.nomeProdutoSelecionado != null) {
+        _nomeProduto = widget.nomeProdutoSelecionado;
+        _idProduto = widget.idProdutoSelecionado;
+        _categoriaSelecionada = widget.idCategoria;
+      }
     }
+
     // ✅ CARREGA PETSHOP QUE VEIO DA TELA DO PET
     _idPetshopSelecionado = widget.idPetshop;
     _nomePetshopSelecionado = widget.nomePetshop;
     _codigoPetshopController.text = widget.idPetshop?.toString() ?? '';
   }
 
-  // ✅ ABRIR JANELA DE BUSCA DE PRODUTO
+  // ✅ ABRIR JANELA DE BUSCA DE PRODUTO — TODAS AS CATEGORIAS + ORDENADO
   Future<void> _escolherProduto() async {
     if (!mounted) return;
-
     try {
-      final idCategoria = widget.idCategoria;
-      final resposta = await http.get(
-        Uri.parse('$apiBase/produtos/categoria/$idCategoria'),
-      );
+      // ✅ SE FOR EDIÇÃO/REPETIR → SÓ DA CATEGORIA | SE FOR NOVO → TODOS
+      final bool ehEdicao =
+          widget.lancamento != null || widget.idLancamentoRepetido != null;
 
-      if (!mounted) return; // ✅ PROTEÇÃO
+      final String url = ehEdicao
+          ? '$apiBase/produtos/categoria/${widget.idCategoria}' // ✅ SÓ DA CATEGORIA
+          : '$apiBase/produtos'; // ✅ TODOS
 
+      final resposta = await http.get(Uri.parse(url));
+
+      if (!mounted) return;
       if (resposta.statusCode != 200) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('❌ Erro ao carregar produtos')),
         );
         return;
       }
-      final List<dynamic> lista = json.decode(resposta.body);
+
+      List<dynamic> lista = json.decode(resposta.body);
+      debugPrint(
+        '📦 Primeiro produto da lista: ${lista.isNotEmpty ? lista[0] : "vazia"}',
+      );
+
+      // ✅ ORDENA EM ORDEM ALFABÉTICA A → Z
+      lista.sort(
+        (a, b) =>
+            a['descricao'].toString().compareTo(b['descricao'].toString()),
+      );
+
       if (lista.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('❌ Nenhum produto encontrado')),
         );
         return;
       }
+
       final resultado = await showDialog<Map<String, dynamic>>(
         context: context,
         builder: (context) {
@@ -139,6 +168,15 @@ class _TelaLancamentoState extends State<TelaLancamento> {
           List<dynamic> listaFiltrada = List.from(lista);
           return StatefulBuilder(
             builder: (context, atualizar) {
+              // ✅ APLICA FILTRO DE BUSCA
+              listaFiltrada = lista
+                  .where(
+                    (p) => p['descricao'].toString().toLowerCase().contains(
+                      textoBusca.toLowerCase(),
+                    ),
+                  )
+                  .toList();
+
               return AlertDialog(
                 title: const Text('📋 Escolher Produto'),
                 content: SizedBox(
@@ -154,17 +192,7 @@ class _TelaLancamentoState extends State<TelaLancamento> {
                           border: OutlineInputBorder(),
                         ),
                         onChanged: (texto) {
-                          atualizar(() {
-                            textoBusca = texto;
-                            listaFiltrada = lista
-                                .where(
-                                  (p) => p['descricao']
-                                      .toString()
-                                      .toLowerCase()
-                                      .contains(texto.toLowerCase()),
-                                )
-                                .toList();
-                          });
+                          atualizar(() => textoBusca = texto);
                         },
                       ),
                       const SizedBox(height: 12),
@@ -176,12 +204,23 @@ class _TelaLancamentoState extends State<TelaLancamento> {
                                 itemCount: listaFiltrada.length,
                                 itemBuilder: (context, i) {
                                   final prod = listaFiltrada[i];
+                                  final nomeCategoria =
+                                      _obterNomeCategoriaPorId(
+                                        prod['idProduto'] ?? 1,
+                                      );
                                   return ListTile(
-                                    title: Text(prod['descricao'].toString()),
+                                    title: Text(
+                                      prod['descricao'].toString(),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    subtitle: Text(nomeCategoria),
                                     onTap: () {
                                       Navigator.pop(context, {
                                         'nome': prod['descricao'].toString(),
                                         'id': prod['id'],
+                                        'idCategoria': prod['idProduto'] ?? 1,
                                       });
                                     },
                                   );
@@ -202,14 +241,18 @@ class _TelaLancamentoState extends State<TelaLancamento> {
           );
         },
       );
+
+      // ✅ PREENCHE TUDO — INCLUSIVE A CATEGORIA AUTOMATICAMENTE
+      // ✅ AO ESCOLHER O PRODUTO → FECHA E VOLTA JÁ COM OS DADOS
       if (resultado != null && mounted) {
-        setState(() {
-          _nomeProduto = resultado['nome'];
-          _idProduto = resultado['id'];
+        Navigator.pop(context, {
+          'nome': resultado['nome'],
+          'id': resultado['id'],
+          'idCategoria': resultado['idCategoria'],
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _salvando = false); // ✅ PROTEÇÃO
+      if (mounted) setState(() => _salvando = false);
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -233,7 +276,6 @@ class _TelaLancamentoState extends State<TelaLancamento> {
       if (!mounted) return;
       if (resposta.statusCode == 200) {
         final dados = json.decode(resposta.body);
-
         if (!mounted) return;
         setState(() {
           _idPetshopSelecionado = dados['id'];
@@ -377,22 +419,27 @@ class _TelaLancamentoState extends State<TelaLancamento> {
         );
         return;
       }
+
       final partes = textoData.split('/');
       if (partes.length != 3) throw Exception('Formato inválido');
+
       final dataBase = DateTime.parse('${partes[2]}-${partes[1]}-${partes[0]}');
       int anos = int.tryParse(_anosController.text) ?? 0;
       int meses = int.tryParse(_mesesController.text) ?? 0;
       int dias = int.tryParse(_diasController.text) ?? 0;
+
       DateTime proxima = DateTime(
         dataBase.year + anos,
         dataBase.month + meses,
         dataBase.day + dias,
       );
+
       _proximaDoseController.text =
           '${proxima.day.toString().padLeft(2, '0')}/'
           '${proxima.month.toString().padLeft(2, '0')}/'
           '${proxima.year}';
-      if (mounted) setState(() {}); // ✅ PROTEÇÃO
+
+      if (mounted) setState(() {});
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -412,7 +459,6 @@ class _TelaLancamentoState extends State<TelaLancamento> {
     );
     if (escolhida == null) return;
     if (mounted) {
-      // ✅ PROTEÇÃO
       setState(() {
         _foto = File(escolhida.path);
         _carregandoFoto = false;
@@ -424,7 +470,6 @@ class _TelaLancamentoState extends State<TelaLancamento> {
   Future<void> _salvarLancamento() async {
     if (_salvando) return;
     if (!mounted) return;
-
     if (_idProduto == null || _nomeProduto == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('❌ Escolha o produto primeiro!')),
@@ -438,7 +483,7 @@ class _TelaLancamentoState extends State<TelaLancamento> {
       return;
     }
 
-    if (mounted) setState(() => _salvando = true); // ✅ PROTEÇÃO
+    if (mounted) setState(() => _salvando = true);
 
     try {
       String? urlFotoGerada;
@@ -487,6 +532,7 @@ class _TelaLancamentoState extends State<TelaLancamento> {
         'repetir': dataRepetir,
         'foto': _urlFoto,
         'idPetshop': _idPetshopSelecionado,
+        'idCategoria': _categoriaSelecionada ?? widget.idCategoria,
       };
 
       if (widget.idLancamentoRepetido != null) {
@@ -540,13 +586,31 @@ class _TelaLancamentoState extends State<TelaLancamento> {
         ).showSnackBar(SnackBar(content: Text('❌ Erro: $e')));
       }
     } finally {
-      if (mounted) setState(() => _salvando = false); // ✅ PROTEÇÃO
+      if (mounted) setState(() => _salvando = false);
     }
   }
 
   // ✅ NOME DA CATEGORIA
   String _obterNomeCategoria() {
     switch (widget.idCategoria) {
+      case 1:
+        return '💉 Vacinas';
+      case 2:
+        return '🥩 Alimentação';
+      case 3:
+        return '💊 Saúde';
+      case 4:
+        return '🧴 Higiene';
+      case 5:
+        return '📦 Outros';
+      default:
+        return '📋 Lançamento';
+    }
+  }
+
+  // ✅ Traduz id → nome da categoria (para mostrar abaixo do produto)
+  String _obterNomeCategoriaPorId(dynamic idCat) {
+    switch (idCat) {
       case 1:
         return '💉 Vacinas';
       case 2:
@@ -581,6 +645,7 @@ class _TelaLancamentoState extends State<TelaLancamento> {
         ],
       ),
     );
+
     if (confirmar == true) {
       if (mounted) setState(() => _salvando = true);
       try {
@@ -706,7 +771,7 @@ class _TelaLancamentoState extends State<TelaLancamento> {
               TextField(
                 controller: _dataController,
                 decoration: const InputDecoration(
-                  labelText: '📅 Data do Lançamento',
+                  labelText: '📅 Data do Procedimento',
                   prefixIcon: Icon(Icons.calendar_today),
                   border: OutlineInputBorder(),
                   hintText: 'DD/MM/AAAA',
@@ -723,6 +788,7 @@ class _TelaLancamentoState extends State<TelaLancamento> {
                     }
                   } catch (_) {}
                   dataInicial ??= DateTime.now();
+
                   DateTime? escolhida = await showDatePicker(
                     context: context,
                     initialDate: dataInicial,
@@ -741,8 +807,7 @@ class _TelaLancamentoState extends State<TelaLancamento> {
               ),
               const SizedBox(height: 20),
 
-              // ✅ CAMPO PETSHOP — MESMO FORMATO DA TELA DO PET
-              // ✅ CAMPO PETSHOP FAVORITO — LUPA INTELIGENTE
+              // ✅ CAMPO PETSHOP
               _nomePetshopSelecionado != null
                   ? InputDecorator(
                       decoration: InputDecoration(
@@ -813,14 +878,11 @@ class _TelaLancamentoState extends State<TelaLancamento> {
                           onPressed: _salvando
                               ? null
                               : () {
-                                  // ✅ LÓGICA DA LUPA
                                   final codigo = _codigoPetshopController.text
                                       .trim();
                                   if (codigo.isNotEmpty) {
-                                    // ✅ TEM CÓDIGO → BUSCA DIRETO, NÃO ABRE LISTA
                                     _buscarPetshopPorCodigo(codigo);
                                   } else {
-                                    // ✅ VAZIO → ABRE A LISTA
                                     _abrirListaPetshops();
                                   }
                                 },
@@ -1005,7 +1067,7 @@ class _TelaLancamentoState extends State<TelaLancamento> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white, // ✅ FUNDO BRANCO
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: Cores.roxoEscuro),
                 ),
@@ -1092,6 +1154,7 @@ class _TelaLancamentoState extends State<TelaLancamento> {
                           }
                         } catch (_) {}
                         dataBase ??= DateTime.now();
+
                         DateTime? escolhida = await showDatePicker(
                           context: context,
                           initialDate: dataBase,
@@ -1205,7 +1268,6 @@ class _TelaLancamentoState extends State<TelaLancamento> {
     try {
       final resposta = await http.get(Uri.parse('$apiBase/lancamentos/$id'));
       if (!mounted) return;
-
       if (resposta.statusCode == 200) {
         final lanc = json.decode(resposta.body);
         _idLancamento = lanc['id'];
@@ -1231,6 +1293,7 @@ class _TelaLancamentoState extends State<TelaLancamento> {
         } catch (e) {
           debugPrint('❌ Erro ao carregar datas: $e');
         }
+
         setState(() => _carregando = false);
       }
     } catch (e) {

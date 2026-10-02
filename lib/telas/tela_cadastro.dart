@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../utils/constantes.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class TelaCadastro extends StatefulWidget {
-  const TelaCadastro({super.key});
+  final Map<String, dynamic>? dadosTutor; // ✅ NOVO
+  const TelaCadastro({super.key, this.dadosTutor});
 
   @override
   State<TelaCadastro> createState() => _TelaCadastroState();
@@ -23,6 +25,9 @@ class _TelaCadastroState extends State<TelaCadastro> {
   // 👁️ Mostrar/Ocultar senha
   bool _senhaVisivel = false;
   bool _confirmaSenhaVisivel = false;
+  String? _codigoCorreto;
+  String _codigoDigitado = '';
+  bool _mostrarCampoCodigo = false;
 
   // 📋 Listas para os combos
   List<String> _listaEstados = [];
@@ -97,14 +102,48 @@ class _TelaCadastroState extends State<TelaCadastro> {
   @override
   void initState() {
     super.initState();
-    _carregarEstados();
+    // ✅ PRIMEIRO carrega os estados...
+    _carregarEstados().then((_) {
+      // ✅ ...SÓ DEPOIS preenche os dados
+      if (widget.dadosTutor != null) {
+        final t = widget.dadosTutor!;
+        setState(() {
+          _nomeController.text = (t['nome'] ?? '').toString().toUpperCase();
+          _cpfController.text = _mascaraCpf(t['cpf']?.toString() ?? '');
+          _telefoneController.text = _mascaraTelefone(
+            t['telefone']?.toString() ?? '',
+          );
+          _emailController.text = (t['email'] ?? '').toString().toLowerCase();
+          _bairroController.text = (t['bairro'] ?? '').toString().toUpperCase();
+          _estadoSelecionado = t['estado'];
+        });
+
+        // ✅ Se tem estado → carrega municípios e seleciona
+        if (_estadoSelecionado != null) {
+          _carregarMunicipios(_estadoSelecionado!).then((_) {
+            setState(() {
+              final idProcurado = t['idMunicipio'];
+
+              _municipioSelecionado = _listaMunicipios.firstWhere(
+                (m) {
+                  final idMun = m['id'] ?? m['idCidade'] ?? m['id_municipio'];
+                  return idMun == idProcurado;
+                },
+                orElse: () {
+                  return null;
+                },
+              );
+            });
+          });
+        }
+      }
+    });
   }
 
   Future<void> _carregarEstados() async {
+    // ✅ mudei de void → Future<void>
     try {
-      final res = await http
-          .get(Uri.parse('$apiBase/estados'))
-          .timeout(const Duration(seconds: 10));
+      final res = await http.get(Uri.parse('$apiBase/estados'));
       if (res.statusCode == 200) {
         setState(() {
           _listaEstados = List<String>.from(json.decode(res.body));
@@ -141,6 +180,27 @@ class _TelaCadastroState extends State<TelaCadastro> {
   // ──────────────────────────────────────
 
   Future<void> _cadastrar() async {
+    // ✅ Se o campo está visível e EM BRANCO → gera código NOVO
+    if (_mostrarCampoCodigo && _codigoDigitado.isEmpty) {
+      setState(() {
+        _codigoCorreto = null;
+      });
+      // Segue abaixo para gerar e enviar código novo
+    }
+    // ✅ Se o campo está visível e PREENCHIDO → confirma
+    else if (_mostrarCampoCodigo) {
+      if (_codigoDigitado == _codigoCorreto) {
+        await _executarCadastroReal();
+      } else {
+        _mensagem(
+          '❌ Código não confere. Digite codigo correto ou apague e clique Salvar para gerar um novo codigo.',
+          Colors.red,
+        );
+      }
+      return;
+    }
+
+    // ✅ PASSO B — Primeiro clique → VALIDAÇÕES NORMAIS
     final nome = _nomeController.text.trim().toUpperCase();
     final cpf = _limpar(_cpfController.text);
     final telefone = _limpar(_telefoneController.text);
@@ -148,8 +208,9 @@ class _TelaCadastroState extends State<TelaCadastro> {
     final bairro = _bairroController.text.trim().toUpperCase();
     final senha = _senhaController.text.trim();
     final confirmaSenha = _confirmaSenhaController.text.trim();
+    final bool ehCadastroNovo = widget.dadosTutor == null;
 
-    // ✅ Validações
+    // ✅ Validações — IGUAIS AO SEU
     if (nome.isEmpty) return _mensagem('❌ Nome é obrigatório', Colors.red);
     if (cpf.isEmpty) return _mensagem('❌ CPF é obrigatório', Colors.red);
     if (!_validarCpf(cpf))
@@ -168,40 +229,122 @@ class _TelaCadastroState extends State<TelaCadastro> {
     if (_municipioSelecionado == null)
       return _mensagem('❌ Selecione um Município', Colors.red);
     if (bairro.isEmpty) return _mensagem('❌ Bairro é obrigatório', Colors.red);
-    if (senha.isEmpty) return _mensagem('❌ Senha é obrigatória', Colors.red);
-    if (senha != confirmaSenha)
-      return _mensagem('❌ As senhas não coincidem', Colors.red);
 
+    if (ehCadastroNovo) {
+      if (senha.isEmpty) return _mensagem('❌ Senha é obrigatória', Colors.red);
+      if (senha != confirmaSenha)
+        return _mensagem('❌ As senhas não coincidem', Colors.red);
+    } else {
+      if (senha.isNotEmpty && senha != confirmaSenha)
+        return _mensagem('❌ As senhas não coincidem', Colors.red);
+    }
+
+    // ✅ Se é EDIÇÃO → pula código, salva direto
+    if (!ehCadastroNovo) {
+      await _executarCadastroReal();
+      return;
+    }
+
+    // ✅ É CADASTRO NOVO → GERA E ENVIA CÓDIGO
+    // ✅ PEGA O TOKEN FCM AGORA MESMO
+    // ✅ É CADASTRO NOVO → GERA E ENVIA CÓDIGO
     setState(() => _carregando = true);
-
     try {
-      final res = await http
+      // ✅ ENVIA SEM O TOKEN — SÓ TELEFONE E E-MAIL
+      final respostaCod = await http
           .post(
-            Uri.parse('$apiBase/tutores'),
+            Uri.parse('$apiBase/enviar-codigo'),
             headers: {'Content-Type': 'application/json'},
             body: json.encode({
-              'nome': nome,
-              'cpf': cpf,
               'telefone': telefone,
-              'email': email,
-              'senha': senha,
-              'idMunicipio': _municipioSelecionado['id'],
-              'bairro': bairro,
-              'estado': _estadoSelecionado,
-              'idPetshop': null,
+              'email': _emailController.text.trim(),
             }),
           )
           .timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+
+      if (respostaCod.statusCode == 200) {
+        final dados = json.decode(respostaCod.body);
+        setState(() {
+          _codigoCorreto = dados['codigo'];
+          _mostrarCampoCodigo = true;
+        });
+        _mensagem('✅ Código enviado! Verifique seu e-mail.', Colors.green);
+      } else if (respostaCod.statusCode == 400) {
+        final erro = json.decode(respostaCod.body);
+        _mensagem('❌ ${erro['erro']}', Colors.red); // ✅ Mostra o erro da API
+      } else {
+        _mensagem('❌ Erro ao enviar código', Colors.red);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _mensagem('❌ Erro de conexão', Colors.red);
+    } finally {
+      if (mounted) setState(() => _carregando = false);
+    }
+  }
+
+  Future<void> _executarCadastroReal() async {
+    final nome = _nomeController.text.trim().toUpperCase();
+    final cpf = _limpar(_cpfController.text);
+    final telefone = _limpar(_telefoneController.text);
+    final email = _emailController.text.trim().toLowerCase();
+    final bairro = _bairroController.text.trim().toUpperCase();
+    final senha = _senhaController.text.trim();
+    final confirmaSenha = _confirmaSenhaController.text.trim();
+    final bool ehCadastroNovo = widget.dadosTutor == null;
+
+    setState(() => _carregando = true);
+    try {
+      final Map<String, dynamic> dadosEnvio = {
+        'nome': nome,
+        'cpf': cpf,
+        'telefone': telefone,
+        'email': email,
+        'idMunicipio': _municipioSelecionado['id'],
+        'bairro': bairro,
+        'estado': _estadoSelecionado,
+        'idPetshop': null,
+      };
+      if (senha.isNotEmpty) {
+        dadosEnvio['senha'] = senha;
+      }
+
+      final resposta;
+      if (ehCadastroNovo) {
+        resposta = await http
+            .post(
+              Uri.parse('$apiBase/tutores'),
+              headers: {'Content-Type': 'application/json'},
+              body: json.encode(dadosEnvio),
+            )
+            .timeout(const Duration(seconds: 15));
+      } else {
+        final idEditar = widget.dadosTutor!['id'];
+        resposta = await http
+            .put(
+              Uri.parse('$apiBase/tutores/$idEditar'),
+              headers: {'Content-Type': 'application/json'},
+              body: json.encode(dadosEnvio),
+            )
+            .timeout(const Duration(seconds: 15));
+      }
 
       if (!mounted) return;
 
-      if (res.statusCode == 201) {
-        _mensagem('✅ Cadastro realizado com sucesso!', Colors.green);
+      if ((ehCadastroNovo && resposta.statusCode == 201) ||
+          (!ehCadastroNovo && resposta.statusCode == 200)) {
+        _mensagem(
+          ehCadastroNovo
+              ? '✅ Cadastro realizado com sucesso!'
+              : '✅ Dados atualizados!',
+          Colors.green,
+        );
         Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) Navigator.pop(context);
+          if (mounted) Navigator.pop(context, true);
         });
       } else {
-        _mensagem(res.body, Colors.red);
+        _mensagem(resposta.body, Colors.red);
       }
     } catch (e) {
       if (!mounted) return;
@@ -415,6 +558,7 @@ class _TelaCadastroState extends State<TelaCadastro> {
                   // SENHA
                   TextField(
                     controller: _senhaController,
+                    enabled: widget.dadosTutor == null, //
                     obscureText: !_senhaVisivel,
                     decoration: InputDecoration(
                       labelText: 'Senha',
@@ -442,6 +586,7 @@ class _TelaCadastroState extends State<TelaCadastro> {
                   // CONFIRMAR SENHA
                   TextField(
                     controller: _confirmaSenhaController,
+                    enabled: widget.dadosTutor == null,
                     obscureText: !_confirmaSenhaVisivel,
                     decoration: InputDecoration(
                       labelText: 'Confirmar Senha',
@@ -467,6 +612,33 @@ class _TelaCadastroState extends State<TelaCadastro> {
                       fillColor: Colors.white,
                     ),
                   ),
+
+                  // ✅ CAMPO DE CÓDIGO — SÓ APARECE QUANDO PRECISAR
+                  if (_mostrarCampoCodigo) ...[
+                    const SizedBox(height: 24),
+                    TextField(
+                      keyboardType: TextInputType.number,
+                      maxLength: 6,
+                      decoration: const InputDecoration(
+                        labelText: 'Código de Verificação',
+                        hintText: 'Digite os 6 dígitos',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.verified_user),
+                      ),
+                      onChanged: (valor) {
+                        setState(() {
+                          _codigoDigitado = valor;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      '🔔 Enviamos o código no e-mail informado.',
+                      style: TextStyle(color: Colors.green, fontSize: 13),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+
                   const SizedBox(height: 24),
 
                   // BOTÃO
@@ -484,7 +656,7 @@ class _TelaCadastroState extends State<TelaCadastro> {
                       child: _carregando
                           ? const CircularProgressIndicator(color: Colors.white)
                           : const Text(
-                              'CADASTRAR',
+                              'SALVAR',
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,

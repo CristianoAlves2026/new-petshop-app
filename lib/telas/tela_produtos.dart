@@ -3,6 +3,15 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../utils/constantes.dart';
 import 'produtos/tela_lancamento.dart';
+import 'tela_cartao_vacina.dart'; // ✅ Adicione esta linha
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'dart:convert';
+import 'tela_visualizacao_pdf.dart';
+import 'dart:io'; // ✅ Para reconhecer Platform
 
 class TelaProdutos extends StatefulWidget {
   final String nomePet;
@@ -251,19 +260,57 @@ class _TelaProdutosState extends State<TelaProdutos> {
 
   // ✅ FLUXO: BUSCA → ESCOLHE → ABRE TELA NOVA
   Future<void> _adicionar() async {
-    // ✅ GARANTE QUE O VALOR ESTÁ CERTO ANTES DE ENVIAR
-    final categoriaParaEnviar = _idCategoria;
-
-    await Navigator.push(
+    // ✅ ABRE A TELA E ESPERA O PRODUTO ESCOLHIDO VOLTAR
+    final resultado = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => TelaLancamento(
           idPet: widget.idPet,
-          idCategoria: categoriaParaEnviar, // ✅ ENVIA VALOR GARANTIDO
+          idCategoria: _idCategoria,
           idPetshop: widget.idPetshop,
         ),
       ),
     );
+
+    // ✅ SE ESCOLHEU UM PRODUTO → MUDA PARA A ABA CERTA E REABRE COM O PRODUTO
+    if (resultado != null && resultado is Map && mounted) {
+      final idCat = resultado['idCategoria'];
+      setState(() {
+        switch (idCat) {
+          case 1:
+            _indiceSelecionado = 0;
+            break;
+          case 2:
+            _indiceSelecionado = 1;
+            break;
+          case 3:
+            _indiceSelecionado = 2;
+            break;
+          case 4:
+            _indiceSelecionado = 3;
+            break;
+          case 5:
+            _indiceSelecionado = 4;
+            break;
+        }
+        _categoriaSelecionada = _nomeCategoria;
+      });
+
+      // ✅ REABRE A TELA JÁ COM O PRODUTO PREENCHIDO
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => TelaLancamento(
+            idPet: widget.idPet,
+            idCategoria: idCat,
+            idPetshop: widget.idPetshop,
+            nomeProdutoSelecionado: resultado['nome'],
+            idProdutoSelecionado: resultado['id'],
+          ),
+        ),
+      );
+    }
+
     _carregarLancamentos();
   }
 
@@ -332,25 +379,48 @@ class _TelaProdutosState extends State<TelaProdutos> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment
+              .spaceBetween, // ✅ Empurra o ícone para a direita
           children: [
-            Text(
-              _categoriaSelecionada,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
+            // ✅ LADO ESQUERDO — Título e nome do pet
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _categoriaSelecionada,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  _nomePetExibicao,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
             ),
-            Text(
-              _nomePetExibicao, // ✅ NOME DO PET EM DESTAQUE
-              style: const TextStyle(
-                fontSize: 22, // ✅ MAIOR
-                fontWeight: FontWeight.bold, // ✅ NEGRITO
-                color: Colors.white, // ✅ BRANCO
+
+            // ✅ LADO DIREITO — Ícone do PDF (só aparece em Vacinas)
+            if (_categoriaSelecionada == 'Vacinas')
+              IconButton(
+                icon: const Icon(
+                  Icons.picture_as_pdf,
+                  color: Colors.white,
+                  size: 26,
+                ),
+                tooltip: 'Cartão de Vacinação',
+                onPressed: () => _mostrarOpcoesPdf(
+                  context,
+                  idPet: widget.idPet,
+                  nomePet: _nomePetExibicao,
+                ),
               ),
-            ),
           ],
         ),
         backgroundColor: Cores.roxoEscuro,
@@ -655,6 +725,520 @@ class _TelaProdutosState extends State<TelaProdutos> {
       setState(() {
         _nomePetExibicao = 'Pet';
       });
+    }
+  }
+
+  // ✅ MOSTRA AS OPÇÕES: Visualizar | Baixar | Compartilhar
+  // ✅ OPÇÕES SIMPLIFICADAS — Baixar e Compartilhar
+  Future<void> _mostrarOpcoesPdf(
+    BuildContext context, {
+    required dynamic idPet,
+    required String nomePet,
+  }) async {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(20),
+              child: Text(
+                'Cartão de Vacinação',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+            const Divider(height: 1),
+
+            // ✅ Opção 1 — Baixar/Salvar
+            ListTile(
+              leading: const Icon(
+                Icons.download_for_offline_outlined,
+                color: Colors.green,
+              ),
+              title: const Text('Baixar'),
+              subtitle: const Text('Salvar na pasta Downloads'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _baixarPdf(context, idPet: idPet, nomePet: nomePet);
+              },
+            ),
+            const Divider(height: 1),
+
+            // ✅ Opção 2 — Compartilhar
+            ListTile(
+              leading: const Icon(Icons.share, color: Colors.blue),
+              title: const Text('Compartilhar'),
+              subtitle: const Text('Enviar por WhatsApp, e-mail...'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _compartilharPdf(context, idPet: idPet, nomePet: nomePet);
+              },
+            ),
+            const Divider(height: 1),
+
+            // ✅ Cancelar
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar', style: TextStyle(fontSize: 16)),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ──────────────────────────────────────────────────────
+  // ✅ 1 — VISUALIZAR PDF na tela
+  // ──────────────────────────────────────────────────────
+  Future<void> _visualizarPdf(
+    BuildContext contexto, {
+    required dynamic idPet,
+    required String nomePet,
+  }) async {
+    ScaffoldMessenger.of(contexto).showSnackBar(
+      const SnackBar(content: Text('📄 Carregando visualização...')),
+    );
+
+    final arquivo = await _gerarArquivoPdf(idPet, nomePet);
+    if (arquivo == null || !contexto.mounted) return;
+
+    // ✅ Abre tela de visualização
+    Navigator.push(
+      contexto,
+      MaterialPageRoute(
+        builder: (newCtx) => TelaVisualizacaoPdf(
+          caminhoArquivo: arquivo.path,
+          nomeArquivo: 'Cartão de Vacinação - $nomePet',
+        ),
+      ),
+    );
+  }
+
+  // ✅ BAIXAR — Salva na pasta Downloads do celular
+  Future<void> _baixarPdf(
+    BuildContext context, {
+    required dynamic idPet,
+    required String nomePet,
+  }) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('💾 Salvando na pasta Downloads...')),
+    );
+
+    final arquivo = await _gerarArquivoPdf(idPet, nomePet);
+    if (arquivo == null || !context.mounted) return;
+
+    try {
+      // ✅ Obtém a pasta de DOWNLOADS do celular
+      Directory? pastaDownloads;
+
+      if (Platform.isAndroid) {
+        pastaDownloads = Directory('/storage/emulated/0/Download');
+        // Cria a pasta se não existir
+        if (!await pastaDownloads.exists()) {
+          await pastaDownloads.create(recursive: true);
+        }
+      } else {
+        // iOS — usa pasta de documentos
+        pastaDownloads = await getApplicationDocumentsDirectory();
+      }
+
+      // ✅ Nome do arquivo limpo
+      String nomeArquivo =
+          'Cartao_Vacina_${nomePet.replaceAll(' ', '_')}_${DateTime.now().day}_${DateTime.now().month}_${DateTime.now().year}.pdf';
+
+      // ✅ Caminho final
+      String caminhoFinal = '${pastaDownloads.path}/$nomeArquivo';
+
+      // ✅ Copia o arquivo
+      await arquivo.copy(caminhoFinal);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Salvo na Downloads: $nomeArquivo'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      // ✅ Se não conseguir na raiz, salva na pasta do app como alternativa
+      try {
+        final pastaDocs = await getApplicationDocumentsDirectory();
+        String nomeArquivo =
+            'Cartao_Vacina_${nomePet.replaceAll(' ', '_')}.pdf';
+        String caminhoFinal = '${pastaDocs.path}/$nomeArquivo';
+        await arquivo.copy(caminhoFinal);
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ Salvo: $caminhoFinal'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      } catch (e2) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('❌ Erro ao salvar: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  // ──────────────────────────────────────────────────────
+  // ✅ 3 — COMPARTILHAR direto
+  // ──────────────────────────────────────────────────────
+  Future<void> _compartilharPdf(
+    BuildContext contexto, {
+    required dynamic idPet,
+    required String nomePet,
+  }) async {
+    final arquivo = await _gerarArquivoPdf(idPet, nomePet);
+    if (arquivo == null || !contexto.mounted) return;
+
+    await Share.shareXFiles(
+      [XFile(arquivo.path)],
+      text: '📋 Cartão de Vacinação — $nomePet',
+      subject: 'Cartão de Vacinação - $nomePet',
+    );
+  }
+
+  // ──────────────────────────────────────────────────────
+  // ✅ FUNÇÃO COMUM — Gera o arquivo PDF e retorna
+  // ──────────────────────────────────────────────────────
+  Future<File?> _gerarArquivoPdf(dynamic idPet, String nomePet) async {
+    try {
+      // 1️⃣ Busca dados do Pet
+      final resPet = await http.get(Uri.parse('$apiBase/pets/$idPet'));
+      if (resPet.statusCode != 200) throw Exception('Pet não encontrado');
+      final pet = json.decode(resPet.body);
+
+      // 2️⃣ Busca vacinas
+      final resVacinas = await http.get(
+        Uri.parse('$apiBase/lancamentos/vacinas/$idPet'),
+      );
+      List<dynamic> vacinas = [];
+      if (resVacinas.statusCode == 200) {
+        vacinas = json.decode(resVacinas.body);
+      }
+
+      // 3️⃣ Cálculo da idade
+      String calcularIdade(dynamic nascimento) {
+        if (nascimento == null) return 'Não informada';
+        try {
+          DateTime nas = DateTime.parse(nascimento.toString());
+          DateTime hoje = DateTime.now();
+          int anos = hoje.year - nas.year;
+          int meses = hoje.month - nas.month;
+          int dias = hoje.day - nas.day;
+          if (dias < 0) {
+            meses--;
+            dias += 30;
+          }
+          if (meses < 0) {
+            anos--;
+            meses += 12;
+          }
+          List<String> p = [];
+          if (anos > 0) p.add('$anos ${anos == 1 ? "ano" : "anos"}');
+          if (meses > 0) p.add('$meses ${meses == 1 ? "mês" : "meses"}');
+          if (dias > 0 && p.isEmpty)
+            p.add('$dias ${dias == 1 ? "dia" : "dias"}');
+          return p.join(' e ');
+        } catch (_) {
+          return 'Não informada';
+        }
+      }
+
+      // 4️⃣ Formata data
+      String formatarData(dynamic data) {
+        if (data == null || data.toString().isEmpty) return '—';
+        try {
+          DateTime d = DateTime.parse(data.toString());
+          return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+        } catch (_) {
+          return data.toString();
+        }
+      }
+
+      final pdf = pw.Document();
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(32),
+          build: (pw.Context context) {
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                // 🟦 CABEÇALHO
+                pw.Container(
+                  width: double.infinity,
+                  decoration: pw.BoxDecoration(
+                    color: PdfColor.fromHex('#6A48B5'),
+                    borderRadius: pw.BorderRadius.vertical(
+                      top: pw.Radius.circular(8),
+                    ),
+                  ),
+                  padding: const pw.EdgeInsets.symmetric(
+                    vertical: 24,
+                    horizontal: 28,
+                  ),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        '🐾 CARTÃO DE VACINAÇÃO',
+                        style: pw.TextStyle(
+                          color: PdfColors.white,
+                          fontSize: 26,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      pw.SizedBox(height: 12),
+                      pw.Text(
+                        nomePet,
+                        style: pw.TextStyle(
+                          color: PdfColors.white,
+                          fontSize: 20,
+                        ),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        'PetShop CRM — Saúde Animal',
+                        style: pw.TextStyle(
+                          color: PdfColor.fromHex('#E0D9F2'),
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                pw.SizedBox(height: 24),
+
+                // 📋 DADOS DO PET
+                pw.Container(
+                  width: double.infinity,
+                  padding: const pw.EdgeInsets.all(20),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColor.fromHex('#F8F5FC'),
+                    borderRadius: pw.BorderRadius.circular(8),
+                  ),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        '🔹 DADOS DO ANIMAL',
+                        style: pw.TextStyle(
+                          fontSize: 16,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColor.fromHex('#6A48B5'),
+                        ),
+                      ),
+                      pw.SizedBox(height: 16),
+                      pw.Text(
+                        '🐶 Nome:        $nomePet',
+                        style: const pw.TextStyle(fontSize: 15),
+                      ),
+                      pw.SizedBox(height: 8),
+                      pw.Text(
+                        '🎂 Nascimento:  ${formatarData(pet['nascimento'])}    Idade:  ${calcularIdade(pet['nascimento'])}',
+                        style: const pw.TextStyle(fontSize: 15),
+                      ),
+                      pw.SizedBox(height: 8),
+                      pw.Text(
+                        '📋 Espécie:     ${pet['especie']?['nomeEspecie'] ?? 'Não informada'}    Raça:  ${pet['raca']?['nome'] ?? 'Não informada'}',
+                        style: const pw.TextStyle(fontSize: 15),
+                      ),
+                      pw.SizedBox(height: 8),
+                      pw.Text(
+                        '👤 Tutor:       ${pet['nomeTutor'] ?? 'Não informado'}',
+                        style: const pw.TextStyle(fontSize: 15),
+                      ),
+                    ],
+                  ),
+                ),
+
+                pw.SizedBox(height: 24),
+
+                // 💉 TÍTULO
+                pw.Text(
+                  '💉 VACINAS APLICADAS',
+                  style: pw.TextStyle(
+                    fontSize: 18,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColor.fromHex('#6A48B5'),
+                  ),
+                ),
+                pw.SizedBox(height: 16),
+
+                // 📊 CABEÇALHO DA TABELA
+                pw.Container(
+                  color: PdfColor.fromHex('#EDE5F7'),
+                  padding: const pw.EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 10,
+                  ),
+                  child: pw.Row(
+                    children: [
+                      pw.Expanded(
+                        flex: 26,
+                        child: pw.Text(
+                          'Vacina',
+                          style: pw.TextStyle(
+                            fontWeight: pw.FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                      pw.Expanded(
+                        flex: 20,
+                        child: pw.Text(
+                          'Aplicação',
+                          style: pw.TextStyle(
+                            fontWeight: pw.FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                      pw.Expanded(
+                        flex: 20,
+                        child: pw.Text(
+                          'Próxima Dose',
+                          style: pw.TextStyle(
+                            fontWeight: pw.FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                      pw.Expanded(
+                        flex: 34,
+                        child: pw.Text(
+                          'Observações',
+                          style: pw.TextStyle(
+                            fontWeight: pw.FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // 📝 LINHAS DAS VACINAS
+                ...vacinas.asMap().entries.map((entry) {
+                  int i = entry.key;
+                  var vac = entry.value;
+                  final corLinha = i % 2 == 0
+                      ? PdfColors.white
+                      : PdfColor.fromHex('#F8F5FC');
+                  return pw.Container(
+                    color: corLinha,
+                    padding: const pw.EdgeInsets.symmetric(
+                      vertical: 14,
+                      horizontal: 10,
+                    ),
+                    child: pw.Row(
+                      children: [
+                        pw.Expanded(
+                          flex: 26,
+                          child: pw.Text(
+                            vac['nome'] ?? vac['produto']?['nome'] ?? '—',
+                            style: const pw.TextStyle(fontSize: 14),
+                          ),
+                        ),
+                        pw.Expanded(
+                          flex: 20,
+                          child: pw.Text(
+                            formatarData(vac['dataAplicacao'] ?? vac['data']),
+                            style: const pw.TextStyle(fontSize: 14),
+                          ),
+                        ),
+                        pw.Expanded(
+                          flex: 20,
+                          child: pw.Text(
+                            formatarData(vac['proximaDose']),
+                            style: const pw.TextStyle(fontSize: 14),
+                          ),
+                        ),
+                        pw.Expanded(
+                          flex: 34,
+                          child: pw.Text(
+                            vac['observacoes']?.toString() ?? '—',
+                            style: const pw.TextStyle(fontSize: 14),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+
+                pw.SizedBox(height: 32),
+                pw.Divider(thickness: 1, color: PdfColor.fromHex('#C4B5DD')),
+                pw.SizedBox(height: 24),
+
+                // 🏥 PROFISSIONAL
+                pw.Text(
+                  '🏥 Aplicado por: ___________________________________________________',
+                  style: const pw.TextStyle(fontSize: 14),
+                ),
+                pw.SizedBox(height: 8),
+                pw.Text(
+                  '   CRMV: ____/_____-__',
+                  style: const pw.TextStyle(fontSize: 14),
+                ),
+
+                pw.SizedBox(height: 40),
+
+                // ✍️ LOCAL E DATA — rodapé
+                pw.Divider(thickness: 2, color: PdfColor.fromHex('#6A48B5')),
+                pw.SizedBox(height: 20),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      'Local: _____________________________________',
+                      style: const pw.TextStyle(fontSize: 14),
+                    ),
+                    pw.Text(
+                      'Data: _____/_____/________________',
+                      style: const pw.TextStyle(fontSize: 14),
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 16),
+                pw.Center(
+                  child: pw.Text(
+                    '🐾 PetShop CRM — Sistema de Gestão Veterinária',
+                    style: pw.TextStyle(fontSize: 12, color: PdfColors.grey600),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+
+      // 6️⃣ Salva temporariamente
+      final diretorio = await getTemporaryDirectory();
+      final arquivo = File(
+        '${diretorio.path}/cartao_vacina_${idPet}_${DateTime.now().millisecondsSinceEpoch}.pdf',
+      );
+      await arquivo.writeAsBytes(await pdf.save());
+
+      return arquivo;
+    } catch (e) {
+      debugPrint('❌ Erro ao gerar PDF: $e');
+      return null;
     }
   }
 }

@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 class TelaCadastroPet extends StatefulWidget {
   final dynamic idTutor;
   final dynamic pet;
+
   const TelaCadastroPet({super.key, required this.idTutor, this.pet});
   @override
   State<TelaCadastroPet> createState() => _TelaCadastroPetState();
@@ -80,20 +81,28 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
     }
 
     // ✅ ==== AQUI VAMOS ADICIONAR O CARREGAMENTO DO PETSHOP ====
-    if (pet['idPetshop'] != null) {
-      _idPetshopSelecionado = pet['idPetshop'];
+    // ✅ ==== CARREGAMENTO DO PETSHOP — PROTEGIDO CONTRA NULL ====
+    final idPetshopValor = pet['idPetshop'];
+    if (idPetshopValor != null && idPetshopValor.toString().isNotEmpty) {
+      _idPetshopSelecionado = idPetshopValor;
       _codigoPetshopController.text = _idPetshopSelecionado.toString();
       // ✅ Busca o nome do Petshop automaticamente
       _buscarPetshopPorCodigo(_idPetshopSelecionado.toString());
+    } else {
+      // ✅ Garante valores vazios quando não tem
+      _idPetshopSelecionado = null;
+      _nomePetshopSelecionado = null;
+      _codigoPetshopController.text = '';
     }
 
-    if (pet['idEspecie'] != null) {
-      final idEspeciePet = pet['idEspecie'];
+    final idEspeciePet = pet['idEspecie'];
+    if (idEspeciePet != null) {
+      // ✅ SÓ BUSCA SE NÃO FOR NULL
       for (var e in _listaEspecies) {
         if (e['id'] == idEspeciePet) {
           _especieSelecionadaId = e['id'];
           _especieSelecionadaNome =
-              e['nomeEspecie']?.toString() ?? e['nome']?.toString();
+              e['nomeEspecie']?.toString() ?? e['nome']?.toString() ?? '';
           break;
         }
       }

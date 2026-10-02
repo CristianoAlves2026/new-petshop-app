@@ -12,7 +12,7 @@ class TelaRecuperarSenha extends StatefulWidget {
 
 class _TelaRecuperarSenhaState extends State<TelaRecuperarSenha> {
   final _cpfController = TextEditingController();
-  final _emailController = TextEditingController();
+  final _emailController = TextEditingController(); // ✅ TROCADO
   bool _carregando = false;
 
   // ──────────────────────────────────────
@@ -37,28 +37,17 @@ class _TelaRecuperarSenhaState extends State<TelaRecuperarSenha> {
   bool _validarCpf(String cpf) {
     if (cpf.length != 11) return false;
     if (cpf.split('').every((c) => c == cpf[0])) return false;
-
     int soma1 = 0;
     for (int i = 0; i < 9; i++) soma1 += int.parse(cpf[i]) * (10 - i);
     int d1 = 11 - (soma1 % 11);
     d1 = d1 >= 10 ? 0 : d1;
     if (d1 != int.parse(cpf[9])) return false;
-
     int soma2 = 0;
     for (int i = 0; i < 10; i++) soma2 += int.parse(cpf[i]) * (11 - i);
     int d2 = 11 - (soma2 % 11);
     d2 = d2 >= 10 ? 0 : d2;
     if (d2 != int.parse(cpf[10])) return false;
-
     return true;
-  }
-
-  // ──────────────────────────────────────
-  // ✅ VALIDAR E-MAIL
-  // ──────────────────────────────────────
-  bool _validarEmail(String email) {
-    final regex = RegExp(r'^[\w\.-]+@[\w\.-]+\.\w+$');
-    return regex.hasMatch(email);
   }
 
   // ──────────────────────────────────────
@@ -66,25 +55,26 @@ class _TelaRecuperarSenhaState extends State<TelaRecuperarSenha> {
   // ──────────────────────────────────────
   Future<void> _recuperar() async {
     final cpf = _limparCpf(_cpfController.text);
-    final email = _emailController.text.trim().toLowerCase();
+    final email = _emailController.text.trim(); // ✅ TROCADO
 
     // ✅ Validações em branco
     if (cpf.isEmpty) return _mensagem('❌ CPF é obrigatório', Colors.red);
-    if (email.isEmpty) return _mensagem('❌ E-mail é obrigatório', Colors.red);
+    if (email.isEmpty)
+      return _mensagem('❌ E-mail é obrigatório', Colors.red); // ✅ TROCADO
 
     // ✅ Validações de formato
     if (!_validarCpf(cpf)) return _mensagem('❌ CPF inválido', Colors.red);
-    if (!_validarEmail(email))
-      return _mensagem('❌ Formato de e-mail inválido', Colors.red);
+    if (!email.contains('@')) {
+      return _mensagem('❌ Digite um e-mail válido', Colors.red);
+    }
 
     setState(() => _carregando = true);
-
     try {
       final res = await http
           .post(
             Uri.parse('$apiBase/recuperar-senha'),
             headers: {'Content-Type': 'application/json'},
-            body: json.encode({'cpf': cpf, 'email': email}),
+            body: json.encode({'cpf': cpf, 'email': email}), // ✅ TROCADO
           )
           .timeout(const Duration(seconds: 15));
 
@@ -92,14 +82,13 @@ class _TelaRecuperarSenhaState extends State<TelaRecuperarSenha> {
 
       if (res.statusCode == 200) {
         final dados = json.decode(res.body);
-        final nome = dados['nome'];
-        final novaSenha = dados['novaSenha'];
-        _mensagem('✅ $nome, sua nova senha é $novaSenha', Cores.roxoEscuro);
+        final mensagem = dados['mensagem'] ?? '✅ Solicitação enviada!';
+        _mensagem(mensagem, Cores.roxoEscuro);
         Future.delayed(const Duration(seconds: 3), () {
           if (mounted) Navigator.pop(context);
         });
       } else if (res.statusCode == 404) {
-        _mensagem('❌ CPF ou E-mail não encontrados', Colors.red);
+        _mensagem('❌ CPF ou E-mail não encontrados', Colors.red); // ✅ TROCADO
       } else {
         _mensagem('❌ Erro ao processar solicitação', Colors.red);
       }
@@ -130,7 +119,7 @@ class _TelaRecuperarSenhaState extends State<TelaRecuperarSenha> {
       backgroundColor: Colors.grey[50],
       body: Column(
         children: [
-          // 🔹 CABEÇALHO COM SETA E TÍTULO
+          // 🔹 CABEÇALHO COM SETA E TÍTULO — IGUAL
           Container(
             width: double.infinity,
             padding: const EdgeInsets.only(top: 12, bottom: 10),
@@ -146,7 +135,6 @@ class _TelaRecuperarSenhaState extends State<TelaRecuperarSenha> {
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  // SETA DE VOLTAR
                   Positioned(
                     left: 8,
                     child: IconButton(
@@ -158,7 +146,6 @@ class _TelaRecuperarSenhaState extends State<TelaRecuperarSenha> {
                       onPressed: () => Navigator.pop(context),
                     ),
                   ),
-                  // TÍTULO
                   const Text(
                     'Recuperar Senha',
                     style: TextStyle(
@@ -181,18 +168,17 @@ class _TelaRecuperarSenhaState extends State<TelaRecuperarSenha> {
                   const Icon(
                     Icons.lock_reset,
                     size: 80,
-                    //color: Color(0xFF2E7D32),
                     color: Cores.roxoEscuro,
                   ),
                   const SizedBox(height: 20),
                   const Text(
-                    'Informe seu CPF e E-mail cadastrados para receber uma nova senha.',
+                    'Informe seu CPF e E-mail cadastrados.', // ✅ ATUALIZADO
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 16, color: Colors.black54),
                   ),
                   const SizedBox(height: 30),
 
-                  // ✅ CAMPO CPF COM MÁSCARA
+                  // ✅ CAMPO CPF — IGUAL
                   TextField(
                     controller: _cpfController,
                     keyboardType: TextInputType.number,
@@ -218,34 +204,24 @@ class _TelaRecuperarSenhaState extends State<TelaRecuperarSenha> {
                   ),
                   const SizedBox(height: 16),
 
-                  // ✅ CAMPO E-MAIL — SÓ MINÚSCULAS
+                  // ✅ CAMPO E-MAIL — NOVO
                   TextField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     decoration: InputDecoration(
-                      labelText: 'E-mail',
-                      prefixIcon: const Icon(Icons.email),
+                      labelText: 'E-mail cadastrado',
+                      hintText: 'seuemail@exemplo.com',
+                      prefixIcon: const Icon(Icons.email_outlined),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                       filled: true,
                       fillColor: Colors.white,
                     ),
-                    onChanged: (v) {
-                      final minusculo = v.toLowerCase();
-                      if (minusculo != v) {
-                        _emailController.value = TextEditingValue(
-                          text: minusculo,
-                          selection: TextSelection.collapsed(
-                            offset: minusculo.length,
-                          ),
-                        );
-                      }
-                    },
                   ),
                   const SizedBox(height: 30),
 
-                  // ✅ BOTÃO RECUPERAR
+                  // ✅ BOTÃO — IGUAL
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(

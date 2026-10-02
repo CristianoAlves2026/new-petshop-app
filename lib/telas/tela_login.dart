@@ -84,21 +84,37 @@ class _TelaLoginState extends State<TelaLogin> {
 
       if (resposta.statusCode == 200) {
         final dados = json.decode(resposta.body);
+
+        // ✅ PROTEGIDO CONTRA NULL
         final idTutor = dados['id'];
-        // ✅ PEGA O TOKEN E ENVIA
+        final String nomeTutor = dados['nome'] ?? '';
+        final String mensagem = dados['mensagem'] ?? 'Bem-vindo!';
+
+        // ✅ SEM ID = NÃO ENTRA
+        if (idTutor == null) {
+          _mostrarMensagem('❌ Usuário não identificado', Colors.red);
+          return;
+        }
+
+        // ✅ ENVIA TOKEN
         String? token = await FirebaseMessaging.instance.getToken();
         if (token != null) {
           await _enviarTokenParaApi(token, idTutor);
         }
-        final String nomeTutor = dados['nome'];
-        _mostrarMensagem(dados['mensagem'], Cores.roxoEscuro);
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) =>
-                TelaPrincipal(idTutor: idTutor, nomeTutor: nomeTutor),
-          ),
-        );
+
+        // ✅ MOSTRA MENSAGEM
+        _mostrarMensagem(mensagem, Cores.roxoEscuro);
+
+        // ✅ NAVEGA — SÓ SE TIVER MONTADO
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  TelaPrincipal(idTutor: idTutor, nomeTutor: nomeTutor),
+            ),
+          );
+        }
       } else if (resposta.statusCode == 401) {
         _mostrarMensagem('❌ CPF ou senha incorretos', Colors.red);
       } else {
