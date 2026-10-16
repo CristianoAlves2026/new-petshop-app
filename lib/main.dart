@@ -10,6 +10,7 @@ import 'telas/tela_cadastro.dart';
 import 'telas/tela_recuperar_senha.dart';
 import 'telas/produtos/tela_lancamento.dart'; // ✅ NOVA — Tela do lançamento
 import 'telas/tela_produtos.dart';
+import 'package:open_filex/open_filex.dart';
 
 final FlutterLocalNotificationsPlugin _notificacoes =
     FlutterLocalNotificationsPlugin();
@@ -92,11 +93,22 @@ Future<void> _inicializarNotificacoesVisuais() async {
   const config = InitializationSettings(android: configAndroid, iOS: configIOS);
   await _notificacoes.initialize(
     config,
+
     // ✅ Ao tocar na notificação exibida no app
-    onDidReceiveNotificationResponse: (resposta) {
+    onDidReceiveNotificationResponse: (resposta) async {
       if (resposta.payload != null) {
+        final payload = resposta.payload!;
+
+        // ✅ Verifica se é um caminho de arquivo PDF
+        if (payload.endsWith('.pdf')) {
+          // Abre o PDF
+          await OpenFilex.open(payload);
+          return;
+        }
+
+        // ✅ Se não for PDF → faz o que já fazia
         try {
-          final dados = json.decode(resposta.payload!);
+          final dados = json.decode(payload);
           _abrirLancamentoDaNotificacao(dados);
         } catch (_) {}
       }
@@ -152,6 +164,27 @@ Future<void> _enviarTokenParaApi(String token, dynamic idTutor) async {
   } catch (e) {
     debugPrint('❌ Erro: $e');
   }
+}
+
+// ✅ Notificação local para PDF
+Future<void> notificarPdfGerado(String caminhoArquivo) async {
+  const detalhesAndroid = AndroidNotificationDetails(
+    'download_pdf',
+    'PDF Pronto',
+    channelDescription: 'Arquivo de cartão de vacinação gerado',
+    importance: Importance.high,
+    priority: Priority.high,
+    showWhen: true,
+  );
+  const detalhes = NotificationDetails(android: detalhesAndroid);
+
+  await _notificacoes.show(
+    caminhoArquivo.hashCode, // ID único
+    '✅ Cartão de Vacinação Pronto',
+    'Clique para abrir o arquivo',
+    detalhes,
+    payload: caminhoArquivo, // ← AQUI VAI O CAMINHO!
+  );
 }
 
 class MeuApp extends StatelessWidget {

@@ -245,10 +245,11 @@ class _TelaLancamentoState extends State<TelaLancamento> {
       // ✅ PREENCHE TUDO — INCLUSIVE A CATEGORIA AUTOMATICAMENTE
       // ✅ AO ESCOLHER O PRODUTO → FECHA E VOLTA JÁ COM OS DADOS
       if (resultado != null && mounted) {
-        Navigator.pop(context, {
-          'nome': resultado['nome'],
-          'id': resultado['id'],
-          'idCategoria': resultado['idCategoria'],
+        // ✅ SÓ ATUALIZA OS CAMPOS — NÃO FECHA A TELA!
+        setState(() {
+          _nomeProduto = resultado['nome'];
+          _idProduto = resultado['id'];
+          _categoriaSelecionada = resultado['idCategoria'];
         });
       }
     } catch (e) {
@@ -1074,9 +1075,13 @@ class _TelaLancamentoState extends State<TelaLancamento> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text(
-                      '⏰ Me lembre em:',
-                      style: TextStyle(
+                    // ✅ Depois:
+                    // ✅ Tira o const e usa o texto dinâmico
+                    Text(
+                      widget.idCategoria == 1
+                          ? 'Próxima Dose:'
+                          : 'Próxima Compra:',
+                      style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
                         color: Cores.roxoEscuro,
@@ -1134,8 +1139,11 @@ class _TelaLancamentoState extends State<TelaLancamento> {
                     const SizedBox(height: 16),
                     TextField(
                       controller: _proximaDoseController,
-                      decoration: const InputDecoration(
-                        labelText: '🔁 Repetir em',
+                      decoration: InputDecoration(
+                        // ✅ TIREI o "const" daqui!
+                        labelText: widget.idCategoria == 1
+                            ? 'Próxima Dose'
+                            : 'Próxima Compra',
                         prefixIcon: Icon(
                           Icons.schedule,
                           color: Cores.roxoEscuro,
@@ -1154,7 +1162,6 @@ class _TelaLancamentoState extends State<TelaLancamento> {
                           }
                         } catch (_) {}
                         dataBase ??= DateTime.now();
-
                         DateTime? escolhida = await showDatePicker(
                           context: context,
                           initialDate: dataBase,

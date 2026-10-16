@@ -199,6 +199,8 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                                             'Sem nome',
                                         idPet: pet['id'],
                                         idPetshop: pet['idPetshop'],
+                                        fotoPet: pet['foto']?.toString(),
+                                        idRacaPet: pet['idRaca'],
                                       ),
                                     ),
                                   );
